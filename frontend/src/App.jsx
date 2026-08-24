@@ -250,12 +250,18 @@ function Chat({ user }) {
       <div className="chat-container">
         <header className="chat-header">
           <div className="header-info">
-            <h2>AI Advisory Bot</h2>
-            <p>Active</p>
+            <div className="avatar">🌱</div>
+            <div className="header-text">
+              <h2>Agri-Bot</h2>
+              <p>Active</p>
+            </div>
           </div>
-          <div className="header-info" style={{textAlign: 'right'}}>
-            <h2>{user.name}</h2>
-            <p>{user.crop} • {user.city}</p>
+          <div className="header-info" style={{ flexDirection: 'row-reverse' }}>
+            <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)' }}>{user.name.charAt(0)}</div>
+            <div className="header-text" style={{ textAlign: 'right' }}>
+              <h2>{user.name}</h2>
+              <p style={{ color: '#cbd5e1', justifyContent: 'flex-end' }}>{user.crop} • {user.city}</p>
+            </div>
           </div>
         </header>
         
@@ -266,8 +272,12 @@ function Chat({ user }) {
             </div>
           ))}
           {loading && (
-            <div className="message bot" style={{opacity: 0.5}}>
-              Thinking...
+            <div className="message bot">
+              <div className="thinking-dots">
+                <div className="dot"></div>
+                <div className="dot"></div>
+                <div className="dot"></div>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
