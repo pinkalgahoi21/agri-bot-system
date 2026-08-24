@@ -1,0 +1,39 @@
+services:
+  # 1. FastAPI Backend Service
+  - type: web
+    name: farmer-advisory-api
+    env: python
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        value: "sqlite:////data/farmers.db"
+      - key: CHROMA_DIR
+        value: "/data/chroma_db"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+    disk:
+      name: database-disk
+      mountPath: /data
+      sizeGB: 1
+
+  # 2. Telegram Bot Background Worker
+  - type: worker
+    name: farmer-telegram-bot
+    env: python
+    rootDir: telegram_bot
+    buildCommand: "pip install python-telegram-bot python-dotenv requests"
+    startCommand: "python bot.py"
+    envVars:
+      - key: BACKEND_URL
+        # This uses Render's internal host service URL for the API
+        fromService:
+          type: web
+          name: farmer-advisory-api
+          envVarKey: RENDER_EXTERNAL_URL
+        value: "${BACKEND_URL}/api"
+      - key: TELEGRAM_TOKEN
+        sync: false

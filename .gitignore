@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv/
+env/
+venv/
+ENV/
+*.sqlite3
+*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env*
+
+# ChromaDB
+backend/database/chroma_db/
+backend/database/*.db
+
+# OS generated files
+.DS_Store
+Thumbs.db
