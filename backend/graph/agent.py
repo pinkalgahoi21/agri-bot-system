@@ -11,7 +11,7 @@ os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY", "")
 
 # Tools
 tools = [search_treatments_tool, get_weather_tool, search_schemes_tool]
-llm = ChatGroq(model="llama3-70b-8192").bind_tools(tools)
+llm = ChatGroq(model="llama-3.3-70b-versatile").bind_tools(tools)
 tool_node = ToolNode(tools)
 
 def should_continue(state: FarmerState):
