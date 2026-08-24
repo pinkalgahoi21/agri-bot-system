@@ -6,12 +6,8 @@ langgraph
 sqlalchemy
 pydantic-settings
 python-dotenv
-langchain-community
-chromadb
-sentence-transformers
 requests
 python-multipart
 Pillow
-openai-whisper
 gtts
 pydub

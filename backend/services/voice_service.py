@@ -12,25 +12,20 @@ import threading
 log = logging.getLogger(__name__)
 
 
-# ── Whisper lazy singleton ─────────────────────────────────────────────────────
-# Loaded on first transcription call — not at import time.
-# _whisper_lock serialises concurrent inference (Whisper is not thread-safe).
+# ── Groq API client ─────────────────────────────────────────────────────────────
 
-_whisper_model = None
-_whisper_lock  = threading.Lock()
+from groq import Groq
+from config import GROQ_API_KEY
 
+_client: Groq | None = None
 
-def _get_whisper():
-    global _whisper_model
-    if _whisper_model is None:
-        with _whisper_lock:
-            if _whisper_model is None:
-                import whisper
-                log.info("Loading Whisper base model...")
-                _whisper_model = whisper.load_model("base")
-                log.info("Whisper model ready")
-    return _whisper_model
-
+def _get_groq_client() -> Groq:
+    global _client
+    if _client is None:
+        if not GROQ_API_KEY or not GROQ_API_KEY.strip():
+            raise RuntimeError("GROQ_API_KEY not configured")
+        _client = Groq(api_key=GROQ_API_KEY)
+    return _client
 
 # ── Language resolution ────────────────────────────────────────────────────────
 # Two-layer lookup: ISO code first (Whisper output), full-name fallback (legacy).
@@ -131,26 +126,26 @@ def convert_ogg_to_wav(ogg_path: str) -> str | None:
         return None
 
 
-# ── Whisper STT ───────────────────────────────────────────────────────────────
+# ── Whisper STT via Groq API ──────────────────────────────────────────────────
 
 def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
     """
-    Transcribe a WAV file using Whisper.
+    Transcribe a WAV file using Groq's Whisper API.
     Returns (text, language_iso_code) or (None, None) on failure.
-    _whisper_lock serialises concurrent calls — Whisper is not thread-safe.
     """
     try:
-        log.info("Transcribing: %s", audio_file_path)
-        model = _get_whisper()
-
-        with _whisper_lock:
-            result = model.transcribe(
-                audio_file_path,
-                task="transcribe",
+        log.info("Transcribing via Groq API: %s", audio_file_path)
+        client = _get_groq_client()
+        
+        with open(audio_file_path, "rb") as file:
+            result = client.audio.transcriptions.create(
+                file=(os.path.basename(audio_file_path), file.read()),
+                model="whisper-large-v3",
+                response_format="verbose_json"
             )
 
-        text     = result["text"].strip()
-        language = result.get("language", "en")
+        text = result.text.strip()
+        language = getattr(result, "language", "en")
 
         if not text:
             log.warning("Empty transcription for: %s", audio_file_path)
