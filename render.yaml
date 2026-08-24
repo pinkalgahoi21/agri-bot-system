@@ -34,6 +34,5 @@ services:
           type: web
           name: farmer-advisory-api
           envVarKey: RENDER_EXTERNAL_URL
-        value: "${BACKEND_URL}/api"
       - key: TELEGRAM_TOKEN
         sync: false

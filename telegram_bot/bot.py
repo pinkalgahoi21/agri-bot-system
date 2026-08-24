@@ -18,6 +18,8 @@ from telegram.ext import (
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000/api")
+if not BACKEND_URL.endswith("/api"):
+    BACKEND_URL = f"{BACKEND_URL.rstrip('/')}/api"
 
 logging.basicConfig(format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
