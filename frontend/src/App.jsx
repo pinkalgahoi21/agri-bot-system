@@ -53,7 +53,7 @@ function Onboarding({ setUser }) {
   return (
     <div className="app-container">
       <div className="onboarding-screen">
-        <h1>Farmer Advisory Bot</h1>
+        <h1>🌱 Agri-Bot</h1>
         <p>Your AI assistant for crop diseases, weather, and schemes.</p>
         
         <form className="onboarding-form" onSubmit={handleSubmit}>
