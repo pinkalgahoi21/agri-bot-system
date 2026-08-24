@@ -1,36 +1,106 @@
+<div align="center">
+  
 # 🌱 Kisan AI Advisor (Agri-Bot System)
 
-A production-grade, multi-channel agricultural advisory system designed to assist Indian farmers with crop diseases, weather forecasts, government schemes, and general farming practices.
+**An Enterprise-Grade, Autonomous AI Advisory Platform for Indian Agriculture**
 
-Farmers can interact with the AI seamlessly via a **modern web interface** or directly through **Telegram**, supporting both voice notes and photos.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-AI_Agents-FF9900.svg)](https://python.langchain.com/v0.1/docs/langgraph/)
+[![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?style=flat&logo=react)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF.svg?style=flat&logo=vite)](https://vitejs.dev/)
 
-## ✨ Features
+*Leveraging state-of-the-art LLMs, Vision models, and RAG to democratize agricultural intelligence.*
 
-- 📸 **Crop Disease Diagnosis**: Upload a photo of a sick plant. The system uses Groq Vision to identify the disease and recommends verified treatments.
-- 🗣️ **Voice-First Interface**: Farmers can send voice notes in their native language. The system transcribes them using OpenAI Whisper, generates a multilingual response, and sends back an audio reply (TTS).
-- 🛡️ **Safe Chemical Recommendations**: Built with a local ChromaDB Vector Database containing official pesticide safety manuals. The AI is strictly restricted from hallucinating chemical names and relies entirely on RAG (Retrieval-Augmented Generation) for medicine.
-- 🌦️ **Real-time Weather**: Integrated with OpenWeather API to provide hyper-local farming advice.
-- 🏛️ **Government Schemes**: Live search integration to help farmers find active agricultural subsidies and programs.
+</div>
 
-## 🏗️ Architecture
+---
 
-This is a decoupled, modern system consisting of three parts:
+## 🚀 Overview
 
-1. **FastAPI Backend (`/backend`)**: The core AI engine powered by LangGraph, LangChain, and Groq. Handles RAG, tools, Whisper STT, gTTS, and SQLite user profiles.
-2. **React Frontend (`/frontend`)**: A beautiful, glassmorphic Single Page Application (SPA) built with Vite, Tailwind-like styling, and React.
-3. **Telegram Proxy (`/telegram_bot`)**: A lightweight worker that proxies Telegram messages, photos, and voice notes directly to the FastAPI backend.
+The **Agri-Bot System** is a next-generation AI platform designed to provide Indian farmers with hyper-local, multilingual, and scientifically accurate farming advice. 
 
-## 🚀 Deployment
+Traditional agricultural advisory systems rely on slow manual intervention. This platform utilizes **LangGraph-driven autonomous agents** and **Retrieval-Augmented Generation (RAG)** to instantly diagnose crop diseases, recommend safe chemical treatments, and provide live weather forecasting—all delivered seamlessly through a beautiful web interface or a Telegram Bot.
 
-This system is fully configured for free deployment on modern PaaS providers.
+---
 
-### 1. Render (Backend + Telegram Bot)
-The project includes a `render.yaml` Blueprint.
-- Connect your GitHub to Render.
-- Deploy as a **Web Service**.
-- The `start.sh` script will automatically boot both the FastAPI backend and the Telegram Bot in the same free container.
+## ✨ Core AI Capabilities
 
-### 2. Vercel (Frontend)
-- Import the repository into Vercel.
-- Set the Root Directory to `frontend`.
-- Add the `VITE_API_URL` environment variable pointing to your Render backend URL (e.g., `https://your-render-url.onrender.com/api`).
+### 🧠 Agentic Routing (LangGraph)
+Powered by a `llama3-70b` model, the system uses LangGraph to autonomously route user queries to the correct specialized tools (Weather API, Scheme Search, or Vector Database) rather than relying on brittle rule-based logic.
+
+### 🛡️ Hallucination-Free Recommendations (RAG)
+To prevent the AI from hallucinating dangerous chemical treatments, the system is backed by a **ChromaDB Vector Store** populated with official agricultural safety manuals. The AI is strictly instructed to query the Vector DB for verified medicine and pesticide recommendations.
+
+### 👁️ Computer Vision Diagnostics
+Farmers can upload images of diseased crops. The system routes the image through **Groq Vision**, performing zero-shot disease classification and returning actionable prevention strategies.
+
+### 🗣️ Multilingual Voice Synthesis
+Built for accessibility, the system supports voice-first interactions. It transcribes regional Indian dialects using **OpenAI Whisper**, processes the request via the LLM, and synthesizes a localized audio response using **gTTS**.
+
+---
+
+## 🏗️ System Architecture
+
+The platform is built on a decoupled, microservice-oriented architecture to ensure scalability and ease of deployment.
+
+```mermaid
+graph TD
+    User([🌾 Farmer])
+    
+    subgraph Interfaces
+        UI[💻 React Web App]
+        TG[📱 Telegram Bot Worker]
+    end
+    
+    subgraph Core AI Engine [FastAPI Backend]
+        Router{LangGraph Agent}
+        Voice[Whisper + gTTS Service]
+        Vision[Groq Vision Service]
+        
+        Router --> |Tool Node| Weather[OpenWeather API]
+        Router --> |Tool Node| Search[Gov Schemes Search]
+        Router --> |Tool Node| RAG[ChromaDB Vector Store]
+    end
+    
+    User <-->|Voice/Text/Image| TG
+    User <-->|HTTP/JSON| UI
+    
+    UI <--> Core
+    TG <--> Core
+```
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **LLM Orchestration** | LangGraph & LangChain | Manages tool execution and stateful agent conversation. |
+| **Inference Engine** | Groq (`llama3-70b`) | Ultra-fast LPU inference for real-time chat and vision. |
+| **Vector Database** | ChromaDB | Embeds and retrieves localized agricultural manuals. |
+| **Backend Framework** | FastAPI | High-performance asynchronous REST API. |
+| **Frontend Framework** | React + Vite | Glassmorphic, highly responsive SPA for desktop and mobile. |
+| **Data Persistence** | SQLite | Lightweight storage for maintaining farmer profiles and session state. |
+
+---
+
+## 🌍 Production Deployment
+
+This repository is configured for seamless deployment on modern PaaS infrastructure using Infrastructure-as-Code (IaC).
+
+### 1. Render (Backend & Telegram Proxy)
+The backend and telegram proxy are orchestrated via the `render.yaml` blueprint. They run concurrently within a single free-tier Web Service.
+- **Environment Variables Required:** `GROQ_API_KEY`, `OPENWEATHER_API_KEY`, `TELEGRAM_TOKEN`
+- **Start Command:** Automatically handled by `start.sh`.
+
+### 2. Vercel (Frontend Web App)
+The Vite SPA is optimized for Vercel's edge network.
+- **Root Directory:** `./frontend`
+- **Environment Variables Required:** `VITE_API_URL` (Pointing to the Render backend)
+
+---
+
+<div align="center">
+  <i>Built to empower the backbone of India. 🇮🇳</i>
+</div>
