@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Image as ImageIcon, Mic, Square } from 'lucide-react'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`;
 
 function App() {
   const [user, setUser] = useState(null)
