@@ -1,6 +1,7 @@
 services:
   - type: web
     name: farmer-advisory-system
+    plan: free
     env: python
     buildCommand: "pip install -r backend/requirements.txt && pip install python-telegram-bot"
     startCommand: "bash start.sh"
