@@ -15,7 +15,7 @@ frontend/dist/
 frontend/.env*
 
 # ChromaDB
-backend/database/chroma_db/
+# backend/database/chroma_db/
 backend/database/*.db
 
 # OS generated files
