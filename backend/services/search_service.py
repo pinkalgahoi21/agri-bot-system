@@ -1,7 +1,13 @@
 from groq import Groq
 from config import GROQ_API_KEY, AI_MODEL
 
-client = Groq(api_key=GROQ_API_KEY)
+client = None
+
+def get_client():
+    global client
+    if client is None:
+        client = Groq(api_key=GROQ_API_KEY)
+    return client
 
 def search_schemes(crop, location):
     """Use Groq AI to generate relevant schemes - no internet needed"""
@@ -22,7 +28,7 @@ and any UP/Uttar Pradesh state specific schemes if location is UP.
 Give at least 6-7 schemes. Be specific with amounts and websites."""
 
     try:
-        response = client.chat.completions.create(
+        response = get_client().chat.completions.create(
             model=AI_MODEL,
             messages=[
                 {
