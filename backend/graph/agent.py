@@ -1,19 +1,33 @@
 import os
-from langchain_groq import ChatGroq
+from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, END
 from .state import FarmerState
 from .tools import search_treatments_tool, get_weather_tool, search_schemes_tool
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import ToolNode
+from config import AGENT_MODEL
 
-# Initialize LLM
-os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY", "")
+# Ensure the API key is set in the environment for the provider
+os.environ.setdefault("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
 
-# Tools
+# ── LLM initialisation ────────────────────────────────────────────────────────
+# init_chat_model reads the provider from the "provider/model" string in config.
+# To switch models, change AGENT_MODEL in config.py — no code changes needed.
+# Examples:
+#   "google_genai/gemini-2.0-flash"
+#   "openai/gpt-4o"
+#   "anthropic/claude-3-5-sonnet-20241022"
+#   "groq/llama-3.3-70b-versatile"
 tools = [search_treatments_tool, get_weather_tool, search_schemes_tool]
-from config import AI_MODEL
-llm = ChatGroq(model=AI_MODEL).bind_tools(tools)
+
+# Split "provider/model-name" into separate args for init_chat_model
+_parts = AGENT_MODEL.split("/", 1)
+_provider = _parts[0] if len(_parts) == 2 else None
+_model_name = _parts[1] if len(_parts) == 2 else AGENT_MODEL
+
+llm = init_chat_model(_model_name, model_provider=_provider).bind_tools(tools)
 tool_node = ToolNode(tools)
+
 
 def should_continue(state: FarmerState):
     messages = state["messages"]
@@ -21,6 +35,7 @@ def should_continue(state: FarmerState):
     if last_message.tool_calls:
         return "tools"
     return END
+
 
 def call_model(state: FarmerState):
     messages = state["messages"]
@@ -40,6 +55,7 @@ Keep answers under 250 words.
 """)
     response = llm.invoke([system_prompt] + messages)
     return {"messages": [response]}
+
 
 workflow = StateGraph(FarmerState)
 

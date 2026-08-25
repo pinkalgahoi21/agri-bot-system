@@ -1,13 +1,26 @@
 """
 services/ai_service.py
-All Groq AI calls — chat, disease diagnosis, weather advice, RAG treatment.
+All Google Gemini AI calls — chat, disease diagnosis, weather advice, RAG treatment.
 """
 from __future__ import annotations
-from groq import Groq
+import google.generativeai as genai
 from pydantic import BaseModel, field_validator
-from config import GROQ_API_KEY, AI_MODEL
+from config import GOOGLE_API_KEY, AI_MODEL
 
-client = Groq(api_key=GROQ_API_KEY)
+genai.configure(api_key=GOOGLE_API_KEY)
+
+def _chat(system: str, user: str, temperature: float = 0.4, max_tokens: int = 600) -> str:
+    """Shared helper: calls Gemini with a system + user turn."""
+    model = genai.GenerativeModel(
+        model_name=AI_MODEL,
+        system_instruction=system,
+        generation_config=genai.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        ),
+    )
+    response = model.generate_content(user)
+    return response.text
 
 
 # ── Shared disease result schema ───────────────────────────────────────────────
@@ -84,18 +97,20 @@ STRICT RULES — follow without exception:
 
 def get_ai_response(profile: dict, history: list, user_message: str) -> str:
     try:
-        messages = [
-            {"role": "system", "content": get_system_prompt(profile)}
-        ] + history + [
-            {"role": "user", "content": user_message}
-        ]
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=messages,
+        # Build conversation context string for Gemini
+        history_text = ""
+        for msg in history:
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "")
+            history_text += f"{role}: {content}\n"
+        full_user = (history_text + f"User: {user_message}").strip()
+
+        return _chat(
+            system=get_system_prompt(profile),
+            user=full_user,
             temperature=0.4,
             max_tokens=600,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] get_ai_response error: {e}")
         return "Sorry, I couldn't process your request. Please try again."
@@ -123,16 +138,12 @@ For each scheme provide:
 Keep it simple, clear and practical."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a government scheme advisor for Indian farmers."},
-                {"role": "user",   "content": prompt},
-            ],
+        return _chat(
+            system="You are a government scheme advisor for Indian farmers.",
+            user=prompt,
             temperature=0.3,
             max_tokens=700,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] summarize_schemes error: {e}")
         return "Sorry, couldn't fetch scheme information. Please try again."
@@ -243,24 +254,17 @@ RULES:
 - Keep entire response under 200 words"""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a plant pathologist. "
-                        "Output ONLY structured diagnosis. "
-                        "Never add extra text before or after the format. "
-                        "The very first line MUST be: Disease: <name>"
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
+        raw = _chat(
+            system=(
+                "You are a plant pathologist. "
+                "Output ONLY structured diagnosis. "
+                "Never add extra text before or after the format. "
+                "The very first line MUST be: Disease: <name>"
+            ),
+            user=prompt,
             temperature=0.2,
             max_tokens=300,
-        )
-        raw = response.choices[0].message.content.strip()
+        ).strip()
         return _parse_disease_output(raw)
 
     except Exception as e:
@@ -287,19 +291,12 @@ Include:
 Be specific and practical. Keep response under 300 words."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert on Indian agricultural government support for crop disease management.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+        return _chat(
+            system="You are an expert on Indian agricultural government support for crop disease management.",
+            user=prompt,
             temperature=0.3,
             max_tokens=500,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] get_disease_support error: {e}")
         return "Sorry, couldn't fetch support information. Please contact your local KVK office."
@@ -343,19 +340,12 @@ Based on this weather, give specific farming advice:
 Keep advice practical and specific to {profile['crop']} crop. Under 350 words."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert agricultural advisor giving precise farming advice based on weather for Indian farmers.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+        return _chat(
+            system="You are an expert agricultural advisor giving precise farming advice based on weather for Indian farmers.",
+            user=prompt,
             temperature=0.3,
             max_tokens=600,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] get_weather_advice error: {e}")
         return "Sorry, couldn't generate weather advice. Please try again."
@@ -392,24 +382,17 @@ practical treatment message for the farmer. Format:
 Keep entire response under 200 words. Use simple English."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an agricultural advisor. "
-                        "Use ONLY the provided context to give treatment advice. "
-                        "Never invent medicines not mentioned in the context. "
-                        "Always add a disclaimer to verify with local experts."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
+        return _chat(
+            system=(
+                "You are an agricultural advisor. "
+                "Use ONLY the provided context to give treatment advice. "
+                "Never invent medicines not mentioned in the context. "
+                "Always add a disclaimer to verify with local experts."
+            ),
+            user=prompt,
             temperature=0.2,
             max_tokens=300,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] get_rag_treatment error: {e}")
         return (
@@ -442,22 +425,15 @@ Precautions:
 Keep entire response under 150 words."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an agricultural expert giving fallback treatment advice. "
-                        "Always include a disclaimer to verify with local experts."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
+        return _chat(
+            system=(
+                "You are an agricultural expert giving fallback treatment advice. "
+                "Always include a disclaimer to verify with local experts."
+            ),
+            user=prompt,
             temperature=0.3,
             max_tokens=250,
         )
-        return response.choices[0].message.content
     except Exception as e:
         print(f"[ai_service] get_ai_fallback_treatment error: {e}")
         return (

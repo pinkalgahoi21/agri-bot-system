@@ -5,10 +5,10 @@ Language detection, multilingual AI response, and TTS language resolution.
 Internal convention: all language keys are FULL NAMES ("hindi", "urdu").
 Whisper returns ISO codes ("hi", "ur") — use normalize_language() to convert.
 """
-from groq import Groq
-from config import GROQ_API_KEY, AI_MODEL
+import google.generativeai as genai
+from config import GOOGLE_API_KEY, AI_MODEL
 
-client = Groq(api_key=GROQ_API_KEY)
+genai.configure(api_key=GOOGLE_API_KEY)
 
 
 # ── Language registry ──────────────────────────────────────────────────────────
@@ -222,20 +222,17 @@ Rules:
 Reply with ONLY one word from the list above."""
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert Indian language detector. Reply with only one word.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=10,
-            temperature=0.0,
+        model = genai.GenerativeModel(
+            model_name=AI_MODEL,
+            system_instruction="You are an expert Indian language detector. Reply with only one word.",
+            generation_config=genai.GenerationConfig(
+                temperature=0.0,
+                max_output_tokens=10,
+            ),
         )
+        response = model.generate_content(prompt)
         detected = (
-            response.choices[0].message.content
+            response.text
             .strip().lower()
             .replace(".", "").replace(",", "")
         )
@@ -299,18 +296,25 @@ STRICT RULES — follow ALL without exception:
 6. If asked anything unrelated to farming, politely decline
    in the farmer's language."""
 
-    messages = [{"role": "system", "content": system_prompt}] \
-               + history \
-               + [{"role": "user", "content": user_message}]
+    # Build conversation context string for Gemini
+    history_text = ""
+    for msg in history:
+        role = msg.get("role", "user").capitalize()
+        content = msg.get("content", "")
+        history_text += f"{role}: {content}\n"
+    full_user = (history_text + f"User: {user_message}").strip()
 
     try:
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=messages,
-            temperature=0.2,    # ← lowered from 0.4 — stricter rule following
-            max_tokens=500,     # ← reduced from 600 — shorter = less drift
+        model = genai.GenerativeModel(
+            model_name=AI_MODEL,
+            system_instruction=system_prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.2,    # ← lowered from 0.4 — stricter rule following
+                max_output_tokens=500,     # ← reduced from 600 — shorter = less drift
+            ),
         )
-        return response.choices[0].message.content
+        response = model.generate_content(full_user)
+        return response.text
 
     except Exception as e:
         print(f"[language] get_multilingual_response error: {e}")

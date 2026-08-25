@@ -12,20 +12,14 @@ import threading
 log = logging.getLogger(__name__)
 
 
-# ── Groq API client ─────────────────────────────────────────────────────────────
 
-from groq import Groq
-from config import GROQ_API_KEY
+# ── Gemini API client (for STT) ────────────────────────────────────────────────
 
-_client: Groq | None = None
+import google.generativeai as genai
+from config import GOOGLE_API_KEY, AI_MODEL
 
-def _get_groq_client() -> Groq:
-    global _client
-    if _client is None:
-        if not GROQ_API_KEY or not GROQ_API_KEY.strip():
-            raise RuntimeError("GROQ_API_KEY not configured")
-        _client = Groq(api_key=GROQ_API_KEY)
-    return _client
+genai.configure(api_key=GOOGLE_API_KEY)
+
 
 # ── Language resolution ────────────────────────────────────────────────────────
 # Two-layer lookup: ISO code first (Whisper output), full-name fallback (legacy).
@@ -126,27 +120,42 @@ def convert_ogg_to_wav(ogg_path: str) -> str | None:
         return None
 
 
-# ── Whisper STT via Groq API ──────────────────────────────────────────────────
+
+# ── Whisper STT via Gemini ────────────────────────────────────────────────────
 
 def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
     """
-    Transcribe a WAV file using Groq's Whisper API.
+    Transcribe a WAV file using Gemini's audio understanding.
     Returns (text, language_iso_code) or (None, None) on failure.
     """
     try:
-        log.info("Transcribing via Groq API: %s", audio_file_path)
-        client = _get_groq_client()
-        
-        with open(audio_file_path, "rb") as file:
-            result = client.audio.transcriptions.create(
-                file=(os.path.basename(audio_file_path), file.read()),
-                model="whisper-large-v3",
-                response_format="verbose_json"
-            )
+        log.info("Transcribing via Gemini API: %s", audio_file_path)
 
-        text = result.text.strip()
-        language = getattr(result, "language", "en")
+        with open(audio_file_path, "rb") as f:
+            audio_bytes = f.read()
 
+        audio_part = {"mime_type": "audio/wav", "data": audio_bytes}
+
+        model = genai.GenerativeModel(model_name=AI_MODEL)
+        result = model.generate_content([
+            "Transcribe this audio exactly as spoken. "
+            "Return ONLY the transcription text, nothing else. "
+            "Also detect the spoken language and include it at the very end as: [lang: <ISO 639-1 code>]",
+            audio_part,
+        ])
+
+        raw = result.text.strip()
+
+        # Extract language tag if present
+        language = "en"
+        if "[lang:" in raw:
+            parts = raw.rsplit("[lang:", 1)
+            raw = parts[0].strip()
+            lang_part = parts[1].replace("]", "").strip()
+            if lang_part:
+                language = lang_part
+
+        text = raw.strip()
         if not text:
             log.warning("Empty transcription for: %s", audio_file_path)
             return None, None
@@ -157,6 +166,7 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
     except Exception as e:
         log.error("Transcription error: %s", e)
         return None, None
+
 
 
 # ── gTTS TTS ──────────────────────────────────────────────────────────────────

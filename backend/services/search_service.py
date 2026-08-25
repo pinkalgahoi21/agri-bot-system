@@ -1,16 +1,10 @@
-from groq import Groq
-from config import GROQ_API_KEY, AI_MODEL
+import google.generativeai as genai
+from config import GOOGLE_API_KEY, AI_MODEL
 
-client = None
-
-def get_client():
-    global client
-    if client is None:
-        client = Groq(api_key=GROQ_API_KEY)
-    return client
+genai.configure(api_key=GOOGLE_API_KEY)
 
 def search_schemes(crop, location):
-    """Use Groq AI to generate relevant schemes - no internet needed"""
+    """Use Gemini AI to generate relevant schemes - no internet needed"""
 
     prompt = f"""List the most important and current Indian government schemes 
 for a {crop} farmer in {location}.
@@ -28,20 +22,12 @@ and any UP/Uttar Pradesh state specific schemes if location is UP.
 Give at least 6-7 schemes. Be specific with amounts and websites."""
 
     try:
-        response = get_client().chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert on Indian agricultural government schemes. Give accurate, detailed, practical information about schemes available for farmers."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+        model = genai.GenerativeModel(
+            model_name=AI_MODEL,
+            system_instruction="You are an expert on Indian agricultural government schemes. Give accurate, detailed, practical information about schemes available for farmers.",
         )
-        return response.choices[0].message.content
+        response = model.generate_content(prompt)
+        return response.text
 
     except Exception as e:
         print(f"AI scheme generation error: {e}")
