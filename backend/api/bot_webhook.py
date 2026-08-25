@@ -3,7 +3,7 @@ import logging
 import os
 import requests
 import tempfile
-from dotenv import load_dotenv
+from fastapi import APIRouter, Request
 
 from telegram import Update
 from telegram.ext import (
@@ -16,23 +16,16 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
-load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000/api")
-if not BACKEND_URL.endswith("/api"):
-    BACKEND_URL = f"{BACKEND_URL.rstrip('/')}/api"
-
-logging.basicConfig(format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+router = APIRouter()
+bot_app = None
+
+# We use the internal localhost URL for the bot to communicate with the FastAPI endpoints
+BACKEND_URL = "http://localhost:8000/api"
 
 # States for Onboarding
 ASK_NAME, ASK_CITY, ASK_CROP = range(3)
-
-async def check_profile(user_id: int) -> bool:
-    # We can ping a generic chat or profile endpoint to check if user exists.
-    # To keep it simple without adding a specific GET /profile, we can just assume 
-    # if /chat returns 404, the user doesn't exist.
-    pass
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
@@ -65,7 +58,7 @@ async def ask_crop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 "user_id": user_id,
                 "name": name,
                 "city": city,
-                "location": city,  # fallback location to city
+                "location": city,
                 "crop": crop
             }
         )
@@ -85,8 +78,6 @@ async def ask_crop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Profile setup cancelled. Type /start to try again.")
     return ConversationHandler.END
-
-# ── Message Handlers ──────────────────────────────────────────────────────────
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
@@ -137,7 +128,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                     files={"image": f}
                 )
         
-        # Don't send "Analyzing..." until we confirm they exist
         response = await asyncio.to_thread(post_vision)
         
         if response.status_code == 404:
@@ -203,7 +193,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         msg = await update.message.reply_text("🎤 Processing your voice note...")
             
         if response.status_code == 200:
-            # Check content type. If audio/mpeg, send voice. If JSON, send text fallback.
             content_type = response.headers.get("content-type", "")
             if "audio" in content_type:
                 tmp_mp3 = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
@@ -230,16 +219,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             
     return ConversationHandler.END
 
-def main() -> None:
-    if not TELEGRAM_TOKEN:
-        logger.error("TELEGRAM_TOKEN is missing")
-        return
 
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+def setup_bot_application(token: str) -> Application:
+    app = Application.builder().token(token).build()
     
-    # By adding handle_message/photo/voice as entry points,
-    # the bot gracefully intercepts a new user's very first message (even if it's not /start),
-    # detects the 404 from the backend, and drops them seamlessly into ASK_NAME!
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command),
@@ -256,9 +239,49 @@ def main() -> None:
     )
     
     app.add_handler(conv_handler)
+    return app
 
-    logger.info("Starting proxy Telegram bot with SEAMLESS onboarding...")
-    app.run_polling()
 
-if __name__ == "__main__":
-    main()
+@router.on_event("startup")
+async def startup_event():
+    global bot_app
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL", "") 
+    
+    if TELEGRAM_TOKEN:
+        logger.info("Initializing Telegram bot webhook...")
+        bot_app = setup_bot_application(TELEGRAM_TOKEN)
+        await bot_app.initialize()
+        await bot_app.start()
+        
+        if WEBHOOK_URL:
+            webhook_endpoint = f"{WEBHOOK_URL.rstrip('/')}/api/telegram/webhook"
+            await bot_app.bot.set_webhook(url=webhook_endpoint)
+            logger.info(f"Webhook set to {webhook_endpoint}")
+        else:
+            # If no webhook URL is set (e.g. running locally), delete the webhook 
+            # and start polling in the background so it still works!
+            await bot_app.bot.delete_webhook()
+            logger.info("No WEBHOOK_URL found. Running locally using long-polling instead.")
+            # Note: For long-polling in FastAPI, we can use app.updater.start_polling()
+            if bot_app.updater:
+                await bot_app.updater.start_polling()
+
+@router.on_event("shutdown")
+async def shutdown_event():
+    global bot_app
+    if bot_app:
+        if bot_app.updater and bot_app.updater.running:
+            await bot_app.updater.stop()
+        await bot_app.stop()
+        await bot_app.shutdown()
+
+
+@router.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    if bot_app:
+        update_data = await request.json()
+        update = Update.de_json(update_data, bot_app.bot)
+        # Use a background task or process directly.
+        await bot_app.process_update(update)
+    return {"status": "ok"}

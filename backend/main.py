@@ -23,5 +23,7 @@ def health_check():
     return {"status": "ok"}
 
 from api.routes import router as api_router
+from api.bot_webhook import router as bot_router
 
 app.include_router(api_router, prefix="/api")
+app.include_router(bot_router, prefix="/api")
