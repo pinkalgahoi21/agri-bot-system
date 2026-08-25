@@ -14,6 +14,7 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
+from telegram.constants import ParseMode
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
@@ -106,7 +107,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         if response.status_code == 200:
             data = response.json()
-            await update.message.reply_text(data["response"])
+            try:
+                await update.message.reply_text(data["response"], parse_mode=ParseMode.MARKDOWN)
+            except Exception:
+                await update.message.reply_text(data["response"])
         else:
             await update.message.reply_text("Sorry, the backend service is currently unavailable.")
     except Exception as e:
@@ -210,7 +214,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                 os.remove(tmp_mp3.name)
             else:
                 data = response.json()
-                await msg.edit_text(data.get("response", "No response."))
+                try:
+                    await msg.edit_text(data.get("response", "No response."), parse_mode=ParseMode.MARKDOWN)
+                except Exception:
+                    await msg.edit_text(data.get("response", "No response."))
         else:
             await msg.edit_text("❌ Failed to process voice.")
             

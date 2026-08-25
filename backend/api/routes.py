@@ -38,7 +38,11 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     result = graph_app.invoke(state, config=config)
     final_message = result["messages"][-1].content
     
-    return {"response": final_message}
+    # Google GenAI sometimes returns content as a list of dicts
+    if isinstance(final_message, list):
+        final_message = "".join([part.get("text", "") for part in final_message if isinstance(part, dict) and "text" in part])
+    
+    return {"response": str(final_message)}
 
 @router.post("/profile")
 def create_profile(user_id: int = Form(...), name: str = Form(...), city: str = Form(...), location: str = Form(...), crop: str = Form(...), db: Session = Depends(get_db)):
@@ -109,6 +113,11 @@ def voice(user_id: int = Form(...), audio: UploadFile = File(...), db: Session =
         config = {"configurable": {"thread_id": str(user_id)}}
         result = graph_app.invoke(state, config=config)
         final_message = result["messages"][-1].content
+        
+        if isinstance(final_message, list):
+            final_message = "".join([part.get("text", "") for part in final_message if isinstance(part, dict) and "text" in part])
+        else:
+            final_message = str(final_message)
         
         # TTS
         tts_path = text_to_speech(final_message, lang)
