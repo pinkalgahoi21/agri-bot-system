@@ -249,23 +249,30 @@ async def startup_event():
     WEBHOOK_URL = os.getenv("WEBHOOK_URL", "") 
     
     if TELEGRAM_TOKEN:
-        logger.info("Initializing Telegram bot webhook...")
-        bot_app = setup_bot_application(TELEGRAM_TOKEN)
-        await bot_app.initialize()
-        await bot_app.start()
-        
-        if WEBHOOK_URL:
-            webhook_endpoint = f"{WEBHOOK_URL.rstrip('/')}/api/telegram/webhook"
-            await bot_app.bot.set_webhook(url=webhook_endpoint)
-            logger.info(f"Webhook set to {webhook_endpoint}")
-        else:
-            # If no webhook URL is set (e.g. running locally), delete the webhook 
-            # and start polling in the background so it still works!
-            await bot_app.bot.delete_webhook()
-            logger.info("No WEBHOOK_URL found. Running locally using long-polling instead.")
-            # Note: For long-polling in FastAPI, we can use app.updater.start_polling()
-            if bot_app.updater:
-                await bot_app.updater.start_polling()
+        try:
+            logger.info("Initializing Telegram bot webhook...")
+            bot_app = setup_bot_application(TELEGRAM_TOKEN)
+            await bot_app.initialize()
+            await bot_app.start()
+            
+            if WEBHOOK_URL:
+                webhook_endpoint = f"{WEBHOOK_URL.rstrip('/')}/api/telegram/webhook"
+                # Sometimes Telegram rate-limits set_webhook if called too often during restarts
+                try:
+                    await bot_app.bot.set_webhook(url=webhook_endpoint)
+                    logger.info(f"Webhook set to {webhook_endpoint}")
+                except Exception as e:
+                    logger.warning(f"Failed to set webhook (might be rate limited). Error: {e}")
+            else:
+                try:
+                    await bot_app.bot.delete_webhook()
+                except Exception:
+                    pass
+                logger.info("No WEBHOOK_URL found. Running locally using long-polling instead.")
+                if bot_app.updater:
+                    await bot_app.updater.start_polling()
+        except Exception as e:
+            logger.error(f"Error during Telegram bot startup: {e}")
 
 @router.on_event("shutdown")
 async def shutdown_event():
