@@ -8,7 +8,7 @@ services:
         value: "sqlite:///farmers.db"
       - key: CHROMA_DIR
         value: "backend/database/chroma_db"
-      - key: GROQ_API_KEY
+      - key: GOOGLE_API_KEY
         sync: false
       - key: OPENWEATHER_API_KEY
         sync: false
