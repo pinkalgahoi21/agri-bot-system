@@ -242,46 +242,52 @@ def setup_bot_application(token: str) -> Application:
     return app
 
 
-@router.on_event("startup")
-async def startup_event():
+async def startup_bot():
+    """Initialize the Telegram bot. Called from main.py lifespan."""
     global bot_app
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
     WEBHOOK_URL = os.getenv("WEBHOOK_URL", "") 
     
-    if TELEGRAM_TOKEN:
-        try:
-            logger.info("Initializing Telegram bot webhook...")
-            bot_app = setup_bot_application(TELEGRAM_TOKEN)
-            await bot_app.initialize()
-            await bot_app.start()
-            
-            if WEBHOOK_URL:
-                webhook_endpoint = f"{WEBHOOK_URL.rstrip('/')}/api/telegram/webhook"
-                # Sometimes Telegram rate-limits set_webhook if called too often during restarts
-                try:
-                    await bot_app.bot.set_webhook(url=webhook_endpoint)
-                    logger.info(f"Webhook set to {webhook_endpoint}")
-                except Exception as e:
-                    logger.warning(f"Failed to set webhook (might be rate limited). Error: {e}")
-            else:
-                try:
-                    await bot_app.bot.delete_webhook()
-                except Exception:
-                    pass
-                logger.info("No WEBHOOK_URL found. Running locally using long-polling instead.")
-                if bot_app.updater:
-                    await bot_app.updater.start_polling()
-        except Exception as e:
-            logger.error(f"Error during Telegram bot startup: {e}")
+    if not TELEGRAM_TOKEN:
+        logger.warning("No TELEGRAM_TOKEN set — Telegram bot disabled.")
+        return
 
-@router.on_event("shutdown")
-async def shutdown_event():
+    try:
+        logger.info("Initializing Telegram bot...")
+        bot_app = setup_bot_application(TELEGRAM_TOKEN)
+        await bot_app.initialize()
+        await bot_app.start()
+        
+        if WEBHOOK_URL:
+            webhook_endpoint = f"{WEBHOOK_URL.rstrip('/')}/api/telegram/webhook"
+            try:
+                await bot_app.bot.set_webhook(url=webhook_endpoint)
+                logger.info(f"Webhook set to {webhook_endpoint}")
+            except Exception as e:
+                logger.warning(f"Failed to set webhook (might be rate limited). Error: {e}")
+        else:
+            try:
+                await bot_app.bot.delete_webhook()
+            except Exception:
+                pass
+            logger.info("No WEBHOOK_URL found. Running locally using long-polling instead.")
+            if bot_app.updater:
+                await bot_app.updater.start_polling()
+    except Exception as e:
+        logger.error(f"Error during Telegram bot startup: {e}")
+
+
+async def shutdown_bot():
+    """Shut down the Telegram bot gracefully. Called from main.py lifespan."""
     global bot_app
     if bot_app:
-        if bot_app.updater and bot_app.updater.running:
-            await bot_app.updater.stop()
-        await bot_app.stop()
-        await bot_app.shutdown()
+        try:
+            if bot_app.updater and bot_app.updater.running:
+                await bot_app.updater.stop()
+            await bot_app.stop()
+            await bot_app.shutdown()
+        except Exception as e:
+            logger.error(f"Error during Telegram bot shutdown: {e}")
 
 
 @router.post("/telegram/webhook")

@@ -152,28 +152,51 @@ function Chat({ user }) {
     const file = e.target.files?.[0]
     if (!file) return
     
-    setMessages(prev => [...prev, { role: 'user', text: `📸 Uploaded image: ${file.name}` }])
+    // Create a local preview URL for the uploaded image
+    const previewUrl = URL.createObjectURL(file)
+    setMessages(prev => [...prev, { role: 'user', text: `📸 Uploaded image: ${file.name}`, image: previewUrl }])
     setLoading(true)
     
     const formData = new FormData()
     formData.append('user_id', user.user_id)
     formData.append('image', file)
 
+    // 120-second timeout for vision analysis (can be slow on free tier)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
+
     try {
       const res = await fetch(`${API_URL}/vision`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       })
+      clearTimeout(timeoutId)
       const data = await res.json()
       if (res.ok) {
         const diag = data.response
-        const msg = `🌿 Identified Crop: ${diag.identified_crop}\n🦠 Disease: ${diag.disease} (${diag.confidence})\n\n🛡️ Prevention:\n${diag.prevention.map(p=>'• '+p).join('\n')}`
-        setMessages(prev => [...prev, { role: 'bot', text: msg }])
+        const parts = [
+          `🌿 Identified Crop: ${diag.identified_crop || 'Unknown'}`,
+          `🦠 Disease: ${diag.disease || 'Unknown'} (${diag.confidence || 'Low'} confidence)`,
+          `📊 Severity: ${diag.severity || 'Unknown'}`,
+          `🔍 Cause: ${diag.cause || 'Unknown'}`,
+          ``,
+          `🛡️ Prevention:`,
+          ...(diag.prevention || []).map(p => '• ' + p),
+          ``,
+          `⏰ Urgency: ${diag.urgency || 'Monitor'}`
+        ]
+        setMessages(prev => [...prev, { role: 'bot', text: parts.join('\n') }])
       } else {
-        setMessages(prev => [...prev, { role: 'bot', text: 'Error analyzing image: ' + (data.detail || 'Unknown error') }])
+        setMessages(prev => [...prev, { role: 'bot', text: '❌ Error analyzing image: ' + (data.detail || 'Unknown error. Please try again.') }])
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'bot', text: 'Failed to connect to backend for image analysis.' }])
+      clearTimeout(timeoutId)
+      if (err.name === 'AbortError') {
+        setMessages(prev => [...prev, { role: 'bot', text: '⏱️ Image analysis timed out. The server may be starting up — please try again in a minute.' }])
+      } else {
+        setMessages(prev => [...prev, { role: 'bot', text: '❌ Failed to connect to backend for image analysis.' }])
+      }
     }
     setLoading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -269,6 +292,13 @@ function Chat({ user }) {
         <main className="chat-messages">
           {messages.map((msg, i) => (
             <div key={i} className={`message ${msg.role}`}>
+              {msg.image && (
+                <img 
+                  src={msg.image} 
+                  alt="Uploaded crop" 
+                  className="message-image"
+                />
+              )}
               {msg.text}
             </div>
           ))}

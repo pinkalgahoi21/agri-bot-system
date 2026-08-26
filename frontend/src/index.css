@@ -292,6 +292,17 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.message-image {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 12px;
+  margin-bottom: 0.8rem;
+  display: block;
+  object-fit: cover;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .chat-input-area {
   padding: 1.5rem 2.5rem;
   background: rgba(0, 0, 0, 0.3);

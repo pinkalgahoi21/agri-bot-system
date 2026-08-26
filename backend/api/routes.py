@@ -61,6 +61,9 @@ def create_profile(user_id: int = Form(...), name: str = Form(...), city: str = 
 
 @router.post("/vision")
 def vision(user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     farmer = db.query(models.Farmer).filter(models.Farmer.user_id == user_id).first()
     if not farmer:
         raise HTTPException(status_code=404, detail="Farmer not found. Please complete your profile.")
@@ -71,12 +74,24 @@ def vision(user_id: int = Form(...), image: UploadFile = File(...), db: Session 
         shutil.copyfileobj(image.file, tmp)
         tmp.close()
         
+        file_size = os.path.getsize(tmp.name)
+        logger.info(f"Vision: received image ({file_size} bytes) from user {user_id}")
+        
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        
         profile_dict = {"location": farmer.location, "crop": farmer.crop, "name": farmer.name}
         result = analyze_crop_image(tmp.name, profile_dict)
         if not result:
-            raise HTTPException(status_code=500, detail="Image analysis failed.")
+            logger.error(f"Vision: analyze_crop_image returned None for user {user_id}")
+            raise HTTPException(status_code=500, detail="Image analysis failed. The AI model may be unavailable — please try again.")
             
         return {"response": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Vision: unexpected error for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Image analysis error: {str(e)}")
     finally:
         if os.path.exists(tmp.name):
             os.remove(tmp.name)
