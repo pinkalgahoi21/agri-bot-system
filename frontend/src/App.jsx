@@ -152,9 +152,13 @@ function Chat({ user }) {
     const file = e.target.files?.[0]
     if (!file) return
     
-    // Create a local preview URL for the uploaded image
-    const previewUrl = URL.createObjectURL(file)
-    setMessages(prev => [...prev, { role: 'user', text: `📸 Uploaded image: ${file.name}`, image: previewUrl }])
+    // Read file as base64 data URL for persistent preview
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setMessages(prev => [...prev, { role: 'user', text: `📸 Uploaded image: ${file.name}`, image: event.target.result }])
+    }
+    reader.readAsDataURL(file)
+    
     setLoading(true)
     
     const formData = new FormData()
