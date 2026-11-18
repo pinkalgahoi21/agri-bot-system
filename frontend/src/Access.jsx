@@ -27,7 +27,11 @@ export function Access({ onReady }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sent ? { email: email.trim(), token: code.trim(), ticket } : { email: email.trim(), password })
       })
-      if (!result.ok) throw Error(result.status === 429 ? 'Too many requests. Wait before trying again.' : sent ? 'Invalid or expired confirmation code.' : mode === 'login' ? 'Sign-in failed. Check your email, password and email verification.' : 'Account creation failed. Check your email and password.')
+      if (!result.ok) {
+        const failure = await result.json().catch(() => ({}))
+        if (typeof failure.detail === 'string') throw Error(failure.detail)
+        throw Error(result.status === 422 ? 'Check the email format and password length (at least 8 characters).' : 'Request failed. Please try again.')
+      }
       const { access_token, ticket: signupTicket } = await result.json()
       if (signupTicket) setTicket(signupTicket)
       if (!access_token && !sent && mode === 'signup') { setPassword(''); setSent(true); return }
