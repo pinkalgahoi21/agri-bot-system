@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from api.auth import identity
-from services.advisory import offline_answer, parse_answer
+from services.advisory import offline_answer, parse_answer, symptom_question
 from services.treatment_flow import assess
 from services.weather_service import profile_weather
 from services.farm_memory import recall, remember
@@ -38,6 +38,11 @@ def chat(request: ChatRequest, user_id: int = Depends(identity), db: Session = D
 
 
 def advise(db, farmer, message):
+    clarification = symptom_question(message, farmer.crop)
+    if clarification:
+        previous, revision = recall(db, farmer)
+        remember(db, farmer, previous, revision, message, clarification["response"])
+        return clarification
     weather = profile_weather(message, farmer.city or farmer.location, farmer.crop)
     if weather is not None:
         return weather

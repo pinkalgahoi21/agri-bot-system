@@ -25,6 +25,19 @@ def parse_answer(content):
     raise ValueError('Missing structured model reply')
 
 
+def symptom_question(message, crop):
+    if not re.search(r'\b(meri|mere|mera|fasal|paudha|paudhe|hai|hain)\b', message, re.I):
+        return None
+    if not re.search(r'\b(black|kaal[aei]|kal[aei]|yellow|peel[aei]|brown)\b', message, re.I):
+        return None
+    if re.search(r'\b(patt\w*|leaf|leaves|stem|fruit|phal|tana|tane|jad|root|blight|rot|spot\w*|dhab\w*)\b', message, re.I):
+        return None
+    named = re.search(r'\b(tomato|tamatar|wheat|gehun|rice|dhan|potato|aloo|cotton|kapas|maize|makka|onion|pyaz)\b', message, re.I)
+    plant = named.group() if named else crop
+    return pack(f"{plant}: rang kahan badla hai?", [{"heading": "Thoda aur batayein",
+        "body": "Pattiyon, tane ya phal par rang badla hai? Ek close-up photo bhej sakte hain? Sirf rang se bimari pakki nahi hoti."}])
+
+
 def offline_answer(message, crop, location):
     schemes = re.search(r'scheme|subsid|insurance|योजना|सब्सिडी|बीमा', message, re.I)
     hindi = bool(re.search('[ऀ-ॿ]', message))
