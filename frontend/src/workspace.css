@@ -15,3 +15,35 @@
 .photo-language select { margin-left: .4rem; border-radius: .3rem; padding: .2rem; }
 .message article section, .message audio { margin-top: .7rem; }
 .message audio { max-width: 100%; }
+#root .field-desk { display:grid; grid-template-columns: 230px minmax(0,1fr); background:#faf9f1; color:#19382e; max-width:1200px; }
+.farm-rail { background:#173d32; color:#fff; padding:2rem 1.25rem; overflow:auto; }
+.desk-kicker { font:700 .68rem/1.4 system-ui,sans-serif; letter-spacing:.16em; }
+.farm-rail h2,.field-desk h1 { font:600 clamp(1.45rem,3vw,2rem)/1.2 Georgia,serif; margin:.4rem 0; }
+.farm-rail p { color:#c7dacf; overflow-wrap:anywhere; }
+.crop-badge { margin:1.4rem 0 2rem; padding:.75rem; border-block:1px solid #517367; color:#e0efd8; }
+.farm-rail nav { display:grid; gap:.5rem; }
+.farm-rail nav button { display:flex; justify-content:space-between; align-items:center; gap:.6rem; border:1px solid #58786d; background:#244b3e; color:white; border-radius:.6rem; font:inherit; padding:.65rem .8rem; cursor:pointer; }
+.farm-rail nav button:hover:not(:disabled) { background:#365e4e; }
+.farm-rail nav button:disabled { opacity:.6; }
+.field-desk .chat-container { min-height:0; min-width:0; }
+.field-desk .chat-header { background:#fffef9; color:#19382e; padding:.85rem 1.4rem; border-bottom:1px solid #d8dfd4; }
+.field-desk .photo-language { color:#476052; }
+.field-desk .chat-messages { padding:1rem clamp(.8rem,3vw,2rem); gap:1rem; min-height:0; }
+#root .field-desk .message.bot { background:white; border:1px solid #d6dfd3; }
+.field-desk .message { box-shadow:none; padding:.85rem 1rem; overflow-wrap:anywhere; }
+.field-desk .message.user { background:#24644b; color:white; }
+.field-desk .chat-input-area { padding:.7rem 1rem; background:#e5ecdf; gap:.5rem; }
+.field-desk .chat-input { min-width:0; padding:.85rem; color:#163a2c; background:white; border:1px solid #9fac9c; }
+.field-desk .chat-input::placeholder { color:#586959; }
+.field-desk .icon-btn { background:#285440; color:white; }
+.field-desk .photo-draft { padding:0 1rem; background:#edf2e8; }
+@media(max-width:760px) {
+  #root .field-desk { display:flex; flex-direction:column; }
+  .field-desk .chat-container { flex:1; height:auto; }
+  .farm-rail { padding:.6rem .75rem; flex:none; }
+  .farm-rail h2,.farm-rail .crop-badge,.farm-rail nav .desk-kicker { display:none; }
+  .farm-rail>div:first-child { display:flex; justify-content:space-between; align-items:center; gap:.75rem; }
+  .farm-rail nav { display:flex; overflow-x:auto; margin-top:.5rem; }
+  .farm-rail nav button { flex:none; padding:.45rem .6rem; font-size:.85rem; }
+  .field-desk .message { max-width:94%; }
+}

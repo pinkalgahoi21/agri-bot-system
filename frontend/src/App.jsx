@@ -105,6 +105,8 @@ function Chat({ user }) {
     { role: 'bot', text: `Hello ${user.name}! I'm ready to help you with your ${user.crop} crop in ${user.city}. How can I assist you today?` }
   ])
   const [input, setInput] = useState('')
+  const [photo, setPhoto] = useState(null)
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
   const [loading, setLoading] = useState(false)
   
   // Voice Recording state
@@ -114,6 +116,13 @@ function Chat({ user }) {
   const messagesEndRef = useRef(null)
   
   const fileInputRef = useRef(null)
+  const composerRef = useRef(null)
+  const topics = [
+    ['Weather', 'How is the weather for ' + user.crop + '?'],
+    ['Crop health', 'My ' + user.crop + ' has these symptoms: '],
+    ['Schemes', 'Which farm schemes should I check for ' + user.crop + ' in ' + user.city + '?'],
+    ['Plan my week', 'What should I check in my ' + user.crop + ' field this week?']
+  ]
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -125,6 +134,8 @@ function Chat({ user }) {
 
   const sendTextMessage = async (e) => {
     e?.preventDefault()
+    if (loading || isRecording) return
+    if (photo) return sendPhoto(photo.file, input.trim())
     if (!input.trim() || loading) return
 
     const userText = input.trim()
@@ -150,14 +161,14 @@ function Chat({ user }) {
     setLoading(false)
   }
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const sendPhoto = async (file, caption) => {
+    setPhoto(null)
+    setInput('')
     
     // Read file as base64 data URL for persistent preview
     const reader = new FileReader()
     reader.onload = (event) => {
-      setMessages(prev => [...prev, { role: 'user', text: `📸 Uploaded image: ${file.name}`, image: event.target.result }])
+      setMessages(prev => [...prev, { role: 'user', text: caption, image: event.target.result }])
     }
     reader.readAsDataURL(file)
     
@@ -166,7 +177,7 @@ function Chat({ user }) {
     const formData = new FormData()
     formData.append('image', file)
     formData.append('language', photoLanguage)
-    formData.append('caption', input.slice(0, 1024))
+    formData.append('caption', caption)
 
     // 120-second timeout for vision analysis (can be slow on free tier)
     const controller = new AbortController()
@@ -273,30 +284,24 @@ function Chat({ user }) {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container field-desk">
+      <aside className="farm-rail">
+        <div><span className="desk-kicker">AGRI-BOT</span><h2>My field desk</h2><p>{user.name} · {user.city}</p></div>
+        <div className="crop-badge">Growing <strong>{user.crop}</strong></div>
+        <nav aria-label="Question starters"><span className="desk-kicker">START A QUESTION</span>
+          {topics.map(([label, prompt]) => <button key={label} type="button" disabled={loading || isRecording || Boolean(photo) || Boolean(input.trim())}
+            onClick={() => {setInput(prompt); composerRef.current?.focus()}}>{label}<span aria-hidden="true">↗</span></button>)}
+        </nav>
+      </aside>
       <div className="chat-container">
-        <header className="chat-header">
-          <div className="header-info">
-            <div className="avatar">🌱</div>
-            <div className="header-text">
-              <h2>Agri-Bot</h2>
-              <p>Farm advisory</p>
-            </div>
-          </div>
-          <div className="header-info" style={{ flexDirection: 'row-reverse' }}>
-            <div className="avatar" style={{ background: 'rgba(255,255,255,0.1)' }}>{user.name.charAt(0)}</div>
-            <div className="header-text" style={{ textAlign: 'right' }}>
-              <h2>{user.name}</h2>
-              <p style={{ color: '#cbd5e1', justifyContent: 'flex-end' }}>{user.crop} • {user.city}</p>
-            </div>
-          </div>
+        <header className="chat-header"><div><span className="desk-kicker">FIELD ADVISORY</span><h1>Farm conversation</h1></div>
           <button className="access-link" onClick={signOut}>Sign out</button>
         </header>
         <label className="photo-language">Photo advice language <select value={photoLanguage} onChange={event => setPhotoLanguage(event.target.value)}>
           {Object.entries({en:'English', hi:'हिन्दी', mr:'मराठी', ta:'தமிழ்', te:'తెలుగు', bn:'বাংলা', kn:'ಕನ್ನಡ', gu:'ગુજરાતી', ml:'മലയാളം', pa:'ਪੰਜਾਬੀ', ur:'اردو'}).map(([code,label]) => <option key={code} value={code}>{label}</option>)}
         </select></label>
         
-        <main className="chat-messages">
+        <main className="chat-messages" aria-label="Conversation">
           {messages.map((msg, i) => (
             <div key={i} className={`message ${msg.role}`}>
               {msg.image && (
@@ -323,21 +328,31 @@ function Chat({ user }) {
           <div ref={messagesEndRef} />
         </main>
 
+        {photo && <div className="photo-draft">
+          <img src={photo.url} width="48" height="48" style={{ objectFit: "cover", verticalAlign: "middle", margin: ".5rem" }} alt="Photo ready to send" />
+          <span>Photo attached · not sent</span>
+          <button type="button" className="access-link" onClick={() => setPhoto(null)}>Remove</button>
+        </div>}
         <form className="chat-input-area" onSubmit={sendTextMessage}>
           <input 
             type="file" 
             accept="image/*" 
             style={{display: 'none'}} 
             ref={fileInputRef}
-            onChange={handleImageUpload}
+            onChange={event => {
+              const selected = event.target.files?.[0]
+              if (selected) setPhoto({ file: selected, url: URL.createObjectURL(selected) })
+              event.target.value = ''
+            }}
           />
-          <button type="button" className="icon-btn" onClick={() => fileInputRef.current?.click()} title="Upload Crop Image">
+          <button type="button" className="icon-btn" disabled={loading || isRecording} onClick={() => fileInputRef.current?.click()} title="Attach crop photo">
             <ImageIcon size={20} />
           </button>
           
           <input 
-            className="chat-input" 
-            placeholder="Ask a question, or name the crop before attaching a photo..."
+            className="chat-input" ref={composerRef} aria-label="Your message or photo caption"
+            placeholder={photo ? "Add a caption (optional)..." : "Ask a question or attach a crop photo..."}
+            maxLength={photo ? 1024 : undefined}
             value={input}
             onChange={e => setInput(e.target.value)}
             disabled={loading || isRecording}
@@ -348,12 +363,12 @@ function Chat({ user }) {
               <Square size={20} />
             </button>
           ) : (
-            <button type="button" className="icon-btn" onClick={startRecording} title="Record Voice Note" disabled={loading}>
+            <button type="button" className="icon-btn" onClick={startRecording} title="Record Voice Note" disabled={loading || Boolean(photo)}>
               <Mic size={20} />
             </button>
           )}
 
-          <button type="submit" className="icon-btn send" disabled={!input.trim() || loading || isRecording}>
+          <button type="submit" aria-label="Send message" className="icon-btn send" disabled={(!input.trim() && !photo) || (photo && input.trim().length > 1024) || loading || isRecording}>
             <Send size={20} />
           </button>
         </form>
