@@ -1,5 +1,10 @@
 import json
 import logging
+from typing import Literal
+from pydantic import BaseModel, ValidationError
+from langchain_core.exceptions import OutputParserException
+from langchain_core.messages import HumanMessage, SystemMessage
+from services.model_runtime import model
 
 from services.ai_service import _chat
 from services.advisory import pack
@@ -10,8 +15,16 @@ from database.medicine import normalize_disease
 WARNING = "AI-generated advice only. This treatment is not officially verified."
 
 
+class Classification(BaseModel):
+    kind: Literal["disease", "farm", "unrelated"]
+    crop: str
+    disease: str
+    language: str
+    summary: str
+
+
 def assess(message, crop, image=False):
-    raw = _chat(
+    instructions = (
         "Classify only the current request; prior farm notes are context, not evidence of farming intent. "
         "Return only JSON with kind (disease, farm, or unrelated). Farm includes growing from scratch, "
         "crop planning, soil suitability, agricultural schemes and weather. For unrelated requests give "
@@ -21,10 +34,18 @@ def assess(message, crop, image=False):
         "not a description of the user's question; do not include citations). Symptoms, pests and treatment "
         "questions are disease requests; schemes and weather are farm requests. If the issue is uncertain "
         "or not a plant, leave disease empty. Do not prescribe. For image assessments respect "
-        "the supplied confidence: low confidence means leave disease empty.",
-        json.dumps({"request": message, "profile_crop": crop, "image_assessment": image}, ensure_ascii=False),
+        "the supplied confidence: low confidence means leave disease empty."
     )
-    item = json.loads(raw.strip().removeprefix("```json").removesuffix("```").strip())
+    payload = json.dumps({"request": message, "profile_crop": crop, "image_assessment": image}, ensure_ascii=False)
+    classifier = model().with_structured_output(Classification)
+    messages = [SystemMessage(content=instructions), HumanMessage(content=payload)]
+    for attempt in range(2):
+        try:
+            item = Classification.model_validate(classifier.invoke(messages)).model_dump()
+            break
+        except (OutputParserException, ValidationError, json.JSONDecodeError):
+            if attempt:
+                return pack("Could you clarify?", [{"heading": "Next step", "body": "Please name the crop and describe what you want to know."}], True)
     if not image and item.get("kind") not in ("farm", "disease"):
         refusal = item.get("summary") if item.get("kind") == "unrelated" else None
         return {**pack("Agri-Bot", [{"heading": "", "body": refusal or "I can help with farming questions only."}]), "out_of_scope": True}
