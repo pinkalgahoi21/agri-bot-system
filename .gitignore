@@ -17,6 +17,7 @@ frontend/.env*
 # ChromaDB
 # backend/database/chroma_db/
 backend/database/*.db
+/vector_index/
 
 # OS generated files
 .DS_Store

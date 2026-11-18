@@ -1,3 +1,5 @@
+For the authenticated website and Telegram deployment, start with [the redeployment guide](REDEPLOY.md).
+
 <div align="center">
   
 # 🌱 Kisan AI Advisor (Agri-Bot System)

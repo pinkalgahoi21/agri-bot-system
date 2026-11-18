@@ -3,24 +3,10 @@ services/ai_service.py
 All Google Gemini AI calls — chat, disease diagnosis, weather advice, RAG treatment.
 """
 from __future__ import annotations
-import google.generativeai as genai
+from services.model_runtime import generate
 from pydantic import BaseModel, field_validator
-from config import GOOGLE_API_KEY, AI_MODEL
-
-genai.configure(api_key=GOOGLE_API_KEY)
-
 def _chat(system: str, user: str, temperature: float = 0.4, max_tokens: int = 600) -> str:
-    """Shared helper: calls Gemini with a system + user turn."""
-    model = genai.GenerativeModel(
-        model_name=AI_MODEL,
-        system_instruction=system,
-        generation_config=genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-        ),
-    )
-    response = model.generate_content(user)
-    return response.text
+    return generate(system, user, temperature=temperature, max_tokens=max_tokens)
 
 
 # ── Shared disease result schema ───────────────────────────────────────────────

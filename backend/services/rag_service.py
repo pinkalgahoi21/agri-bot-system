@@ -18,14 +18,24 @@ def search_rag(disease: str, crop: str = "", n_results: int = 3) -> list[dict]:
         log.warning("search_rag called with empty disease — returning []")
         return []
 
-    crop_key = crop.strip().lower()
-    disease_key = normalize_disease(disease)
+    if n_results <= 0:
+        return []
+    crop_key = " ".join(crop.casefold().split())
+    crop_key = {"paddy": "rice", "corn": "maize"}.get(crop_key, crop_key)
+    raw_issue = " ".join(disease.casefold().split())
+    disease_key = normalize_disease(raw_issue)
 
     results = []
 
     # If we have the exact crop in our database
     if crop_key in MEDICINE_DB:
         crop_db = MEDICINE_DB[crop_key]
+        if raw_issue in crop_db:
+            disease_key = raw_issue
+        elif disease_key not in crop_db:
+            matches = [key for key in crop_db if normalize_disease(key) == disease_key]
+            if len(matches) == 1:
+                disease_key = matches[0]
         
         # Look for the exact disease match
         if disease_key in crop_db:
@@ -42,23 +52,6 @@ def search_rag(disease: str, crop: str = "", n_results: int = 3) -> list[dict]:
                     }
                 })
 
-    # If we didn't find it for the specific crop, let's search across all crops just in case
-    # (Many diseases like 'aphids' share treatments across crops)
-    if not results:
-        for db_crop, db_diseases in MEDICINE_DB.items():
-            if disease_key in db_diseases:
-                data = db_diseases[disease_key]
-                for product in data.get("recommended_products", []):
-                    doc_str = f"Crop: {db_crop.title()} | Disease: {disease_key.title()} | Product: {product.get('active_ingredient')} ({product.get('formulation')})"
-                    results.append({
-                        "document": doc_str,
-                        "metadata": {
-                            "crop": db_crop,
-                            "issue_name": disease_key,
-                            "category": data.get("category", "unknown"),
-                            **product
-                        }
-                    })
 
     # Return up to n_results
     return results[:n_results]

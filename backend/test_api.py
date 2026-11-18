@@ -1,5 +1,13 @@
-import requests
+import unittest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from api.routes import router
 
-response = requests.post("http://127.0.0.1:8000/api/chat", json={"user_id": 1, "message": "How can I improve my wheat yield?"})
-print(response.status_code)
-print(response.json())
+
+class ProtectedRoutes(unittest.TestCase):
+    def test_chat_requires_identity(self):
+        app = FastAPI()
+        app.include_router(router)
+        with TestClient(app) as client:
+            response = client.post('/chat', json={'user_id': 1, 'message': 'Crop advice'})
+        self.assertEqual(response.status_code, 401)

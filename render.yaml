@@ -2,12 +2,17 @@ services:
   - type: web
     name: farmer-advisory-system
     plan: free
-    env: docker
+    runtime: docker
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
-        value: "sqlite:///farmers.db"
-      - key: CHROMA_DIR
-        value: "backend/database/chroma_db"
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: AUTH_EMAIL_FROM
+        sync: false
+      - key: ANONYMIZED_TELEMETRY
+        value: "FALSE"
       - key: GOOGLE_API_KEY
         sync: false
       - key: OPENWEATHER_API_KEY

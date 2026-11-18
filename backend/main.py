@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from database import database
 from database import models
 import logging
@@ -23,13 +22,6 @@ async def lifespan(app):
 
 app = FastAPI(title="Farmer Advisory API", version="1.0.0", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/health")
 def health_check():
@@ -38,6 +30,14 @@ def health_check():
 from api.routes import router as api_router
 from api.bot_webhook import router as bot_router
 
+from api.auth import router as auth_router
+app.include_router(auth_router, prefix="/api")
 app.include_router(api_router, prefix="/api")
 app.include_router(bot_router, prefix="/api")
+
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+site = Path(__file__).resolve().parents[1] / 'frontend' / 'dist'
+if site.is_dir():
+    app.mount('/', StaticFiles(directory=site, html=True), name='website')
 

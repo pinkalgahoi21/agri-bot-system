@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
+import base64
+import logging
+from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from api.auth import identity
+from services.advisory import offline_answer, parse_answer
+from services.treatment_flow import assess
+from services.farm_memory import recall, remember
+import json
+from services.language_service import normalize_language
 import shutil
 import os
 import tempfile
@@ -17,35 +25,42 @@ from services.voice_service import convert_ogg_to_wav, transcribe_voice, text_to
 router = APIRouter()
 
 class ChatRequest(BaseModel):
-    user_id: int
     message: str
 
 @router.post("/chat")
-def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    farmer = db.query(models.Farmer).filter(models.Farmer.user_id == request.user_id).first()
+def chat(request: ChatRequest, user_id: int = Depends(identity), db: Session = Depends(get_db)):
+    farmer = db.query(models.Farmer).filter(models.Farmer.user_id == user_id).first()
     if not farmer:
         raise HTTPException(status_code=404, detail="Farmer not found. Please complete your profile.")
     
+    return advise(db, farmer, request.message)
+
+
+def advise(db, farmer, message):
+    previous, revision = recall(db, farmer)
+    contextual = json.dumps({"prior_farm_note": previous, "current_request": message}, ensure_ascii=False) if previous else message
     state = {
         "user_id": farmer.user_id,
         "name": farmer.name,
         "location": farmer.location,
         "crop": farmer.crop,
-        "messages": [HumanMessage(content=request.message)]
+        "messages": [HumanMessage(content=contextual)]
     }
+    try:
+        assessment = assess(contextual, farmer.crop)
+        if assessment is None:
+            result = graph_app.invoke(state, config={'recursion_limit': 8})
+            assessment = parse_answer(result['messages'][-1].content)
+        if not assessment.get("out_of_scope"):
+            remember(db, farmer, previous, revision, message, assessment["response"])
+        return assessment
+    except Exception:
+        logging.getLogger(__name__).warning('Advisory unavailable', exc_info=True)
+        return offline_answer(message, farmer.crop, farmer.location)
 
-    config = {"configurable": {"thread_id": str(request.user_id)}}
-    result = graph_app.invoke(state, config=config)
-    final_message = result["messages"][-1].content
-    
-    # Google GenAI sometimes returns content as a list of dicts
-    if isinstance(final_message, list):
-        final_message = "".join([part.get("text", "") for part in final_message if isinstance(part, dict) and "text" in part])
-    
-    return {"response": str(final_message)}
 
 @router.post("/profile")
-def create_profile(user_id: int = Form(...), name: str = Form(...), city: str = Form(...), location: str = Form(...), crop: str = Form(...), db: Session = Depends(get_db)):
+def create_profile(user_id: int = Depends(identity), name: str = Form(...), city: str = Form(...), location: str = Form(...), crop: str = Form(...), db: Session = Depends(get_db)):
     farmer = db.query(models.Farmer).filter(models.Farmer.user_id == user_id).first()
     if farmer:
         farmer.name = name
@@ -60,7 +75,7 @@ def create_profile(user_id: int = Form(...), name: str = Form(...), city: str = 
     return {"status": "success"}
 
 @router.post("/vision")
-def vision(user_id: int = Form(...), image: UploadFile = File(...), db: Session = Depends(get_db)):
+def vision(user_id: int = Depends(identity), image: UploadFile = File(...), language: str = Form("en"), caption: str = Form("", max_length=1024), db: Session = Depends(get_db)):
     import logging
     logger = logging.getLogger(__name__)
     
@@ -80,24 +95,39 @@ def vision(user_id: int = Form(...), image: UploadFile = File(...), db: Session 
         if file_size == 0:
             raise HTTPException(status_code=400, detail="Uploaded image is empty.")
         
-        profile_dict = {"location": farmer.location, "crop": farmer.crop, "name": farmer.name}
+        profile_dict = {"location": farmer.location, "crop": farmer.crop, "name": farmer.name, "language": normalize_language(language)}
+        profile_dict["caption"] = caption
         result = analyze_crop_image(tmp.name, profile_dict)
         if not result:
             logger.error(f"Vision: analyze_crop_image returned None for user {user_id}")
-            raise HTTPException(status_code=500, detail="Image analysis failed. The AI model may be unavailable — please try again.")
+            return {'fallback': True, 'response': {'identified_crop': 'Unknown', 'disease': 'Not assessed', 'confidence': 'Low', 'severity': 'Unknown', 'cause': 'Image analysis unavailable.', 'prevention': ['Retry with a clear photo or describe the symptoms by text.'], 'urgency': 'Not assessed'}}
             
+        match = result.get("crop_match", "uncertain")
+        if match != "match" or result.get("identified_crop") in ("unknown", "not_a_plant"):
+            notice = result.get("crop_notice") or "I could not confirm the expected crop. Please send a clearer photo."
+            return {"response": {"kind": "crop_notice", "message": notice}}
+        if result.get("confidence", "Low").lower() == "low" or result.get("disease", "").lower().startswith(("unclear", "unknown")):
+            return {"response": {"kind": "crop_notice", "message": "I cannot identify the issue confidently. Please send a clearer photo of the affected area."}}
+        try:
+            previous, revision = recall(db, farmer)
+            assessment = assess({**result, "prior_farm_note": previous, "reply_language": profile_dict["language"]}, result["identified_crop"], image=True)
+            result["treatment"] = assessment["response"]
+            remember(db, farmer, previous, revision, {"caption": caption, "photo_findings": result["disease"]}, assessment["response"])
+        except Exception:
+            logger.warning("Photo treatment lookup unavailable", exc_info=True)
+            result["treatment"] = "Treatment assessment unavailable. No treatment was verified."
         return {"response": result}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Vision: unexpected error for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Image analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Image analysis failed. Please try again.")
     finally:
         if os.path.exists(tmp.name):
             os.remove(tmp.name)
 
 @router.post("/voice")
-def voice(user_id: int = Form(...), audio: UploadFile = File(...), db: Session = Depends(get_db)):
+def voice(user_id: int = Depends(identity), audio: UploadFile = File(...), db: Session = Depends(get_db)):
     farmer = db.query(models.Farmer).filter(models.Farmer.user_id == user_id).first()
     if not farmer:
         raise HTTPException(status_code=404, detail="Farmer not found. Please complete your profile.")
@@ -117,32 +147,17 @@ def voice(user_id: int = Form(...), audio: UploadFile = File(...), db: Session =
         if not text:
             raise HTTPException(status_code=400, detail="Could not understand audio.")
             
-        # Run through chat agent
-        state = {
-            "user_id": farmer.user_id,
-            "name": farmer.name,
-            "location": farmer.location,
-            "crop": farmer.crop,
-            "messages": [HumanMessage(content=text)]
-        }
-        config = {"configurable": {"thread_id": str(user_id)}}
-        result = graph_app.invoke(state, config=config)
-        final_message = result["messages"][-1].content
-        
-        if isinstance(final_message, list):
-            final_message = "".join([part.get("text", "") for part in final_message if isinstance(part, dict) and "text" in part])
-        else:
-            final_message = str(final_message)
-        
-        # TTS
-        tts_path = text_to_speech(final_message, lang)
-        if not tts_path:
-            return {"response": final_message, "transcribed": text} # fallback to text
-            
-        return FileResponse(tts_path, media_type="audio/mpeg", filename="response.mp3")
+        reply = advise(db, farmer, text)
+        reply['transcribed'] = text
+        try:
+            tts_path = text_to_speech(reply['response'], lang)
+            if tts_path:
+                reply['audio_base64'] = base64.b64encode(Path(tts_path).read_bytes()).decode('ascii')
+        except Exception:
+            logging.getLogger(__name__).warning('Speech synthesis unavailable')
+        return reply
         
     finally:
         cleanup_file(tmp_in.name)
         cleanup_file(wav_path)
-        # Note: tts_path is returned by FileResponse, so FastAPI handles cleanup or we might leak it. 
-        # But for this demo, it's fine.
+        cleanup_file(tts_path)

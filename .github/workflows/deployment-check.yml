@@ -1,0 +1,24 @@
+name: Deployment check
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t agribot-ci .
+      - run: docker run --rm --network host -e DATABASE_URL=postgresql://postgres:ci-only@localhost:5432/postgres -w /app/backend agribot-ci python -m unittest discover -v
+      - run: |
+          docker run -d --name agribot --network host -e DATABASE_URL=postgresql://postgres:ci-only@localhost:5432/postgres agribot-ci
+          curl --fail --retry 20 --retry-delay 2 --retry-connrefused http://localhost:8000/health
+          curl --fail http://localhost:8000/ > /dev/null
+          docker exec -w /app/backend agribot python -c "from services.vector_rag import index; assert index().count() > 0"

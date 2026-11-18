@@ -2,13 +2,16 @@ fastapi
 uvicorn
 langchain
 langchain-google-genai
-google-generativeai
 langgraph
 sqlalchemy
 pydantic-settings
 python-dotenv
 requests
 python-multipart
+psycopg[binary]
+chromadb==1.0.21
+pypdf>=5,<7
+python-telegram-bot
 Pillow
 gtts
 pydub

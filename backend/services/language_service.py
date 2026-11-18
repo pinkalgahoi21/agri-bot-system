@@ -5,10 +5,7 @@ Language detection, multilingual AI response, and TTS language resolution.
 Internal convention: all language keys are FULL NAMES ("hindi", "urdu").
 Whisper returns ISO codes ("hi", "ur") — use normalize_language() to convert.
 """
-import google.generativeai as genai
-from config import GOOGLE_API_KEY, AI_MODEL
-
-genai.configure(api_key=GOOGLE_API_KEY)
+from services.model_runtime import generate
 
 
 # ── Language registry ──────────────────────────────────────────────────────────
@@ -222,17 +219,9 @@ Rules:
 Reply with ONLY one word from the list above."""
 
     try:
-        model = genai.GenerativeModel(
-            model_name=AI_MODEL,
-            system_instruction="You are an expert Indian language detector. Reply with only one word.",
-            generation_config=genai.GenerationConfig(
-                temperature=0.0,
-                max_output_tokens=10,
-            ),
-        )
-        response = model.generate_content(prompt)
+        output = generate("Identify the Indian language. Reply with one word.", prompt, temperature=0, max_tokens=10)
         detected = (
-            response.text
+            output
             .strip().lower()
             .replace(".", "").replace(",", "")
         )
@@ -305,16 +294,7 @@ STRICT RULES — follow ALL without exception:
     full_user = (history_text + f"User: {user_message}").strip()
 
     try:
-        model = genai.GenerativeModel(
-            model_name=AI_MODEL,
-            system_instruction=system_prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0.2,    # ← lowered from 0.4 — stricter rule following
-                max_output_tokens=500,     # ← reduced from 600 — shorter = less drift
-            ),
-        )
-        response = model.generate_content(full_user)
-        return response.text
+        return generate(system_prompt, full_user, temperature=0.2, max_tokens=500)
 
     except Exception as e:
         print(f"[language] get_multilingual_response error: {e}")

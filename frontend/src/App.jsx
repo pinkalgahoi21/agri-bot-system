@@ -1,22 +1,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Image as ImageIcon, Mic, Square } from 'lucide-react'
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`;
+import { Access } from './Access.jsx'
+import { api, API_URL, signOut } from './session.js'
 
 function App() {
-  const [user, setUser] = useState(null)
-  
-  if (!user) {
-    return <Onboarding setUser={setUser} />
-  }
-  
-  return <Chat user={user} />
+  const [profile, setProfile] = useState(undefined)
+  const [generation, reset] = useState(0)
+  useEffect(() => {
+    const expired = () => { setProfile(undefined); reset(value => value + 1) }
+    window.addEventListener('signed-out', expired)
+    return () => window.removeEventListener('signed-out', expired)
+  }, [])
+  if (profile === undefined) return <Access key={generation} onReady={setProfile} />
+  if (!profile) return <Onboarding setUser={setProfile} />
+  return <Chat user={profile} />
 }
 
 function Onboarding({ setUser }) {
   const [formData, setFormData] = useState({
-    user_id: Math.floor(Math.random() * 1000000), // mock ID for web
     name: '',
     city: '',
     crop: ''
@@ -28,14 +30,13 @@ function Onboarding({ setUser }) {
     setLoading(true)
     
     const data = new FormData()
-    data.append('user_id', formData.user_id)
     data.append('name', formData.name)
     data.append('city', formData.city)
     data.append('location', formData.city)
     data.append('crop', formData.crop)
 
     try {
-      const res = await fetch(`${API_URL}/profile`, {
+      const res = await api(`${API_URL}/profile`, {
         method: 'POST',
         body: data
       })
@@ -99,6 +100,7 @@ function Onboarding({ setUser }) {
 }
 
 function Chat({ user }) {
+  const [photoLanguage, setPhotoLanguage] = useState('en')
   const [messages, setMessages] = useState([
     { role: 'bot', text: `Hello ${user.name}! I'm ready to help you with your ${user.crop} crop in ${user.city}. How can I assist you today?` }
   ])
@@ -131,18 +133,18 @@ function Chat({ user }) {
     setLoading(true)
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
+      const res = await api(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.user_id, message: userText })
+        body: JSON.stringify({ message: userText })
       })
       const data = await res.json()
       if (res.ok) {
-        setMessages(prev => [...prev, { role: 'bot', text: data.response }])
+        setMessages(prev => [...prev, { role: 'bot', report: data.advisory, text: data.response }])
       } else {
         setMessages(prev => [...prev, { role: 'bot', text: 'Error: ' + (data.detail || data.error) }])
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'bot', text: 'Failed to connect to backend.' }])
     }
     setLoading(false)
@@ -162,15 +164,16 @@ function Chat({ user }) {
     setLoading(true)
     
     const formData = new FormData()
-    formData.append('user_id', user.user_id)
     formData.append('image', file)
+    formData.append('language', photoLanguage)
+    formData.append('caption', input.slice(0, 1024))
 
     // 120-second timeout for vision analysis (can be slow on free tier)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 120000)
 
     try {
-      const res = await fetch(`${API_URL}/vision`, {
+      const res = await api(`${API_URL}/vision`, {
         method: 'POST',
         body: formData,
         signal: controller.signal
@@ -179,6 +182,12 @@ function Chat({ user }) {
       const data = await res.json()
       if (res.ok) {
         const diag = data.response
+        if (diag.kind === 'crop_notice') {
+          setMessages(prev => [...prev, { role: 'bot', text: diag.message }])
+          setLoading(false)
+          if (fileInputRef.current) fileInputRef.current.value = ''
+          return
+        }
         const parts = [
           `🌿 Identified Crop: ${diag.identified_crop || 'Unknown'}`,
           `🦠 Disease: ${diag.disease || 'Unknown'} (${diag.confidence || 'Low'} confidence)`,
@@ -190,6 +199,7 @@ function Chat({ user }) {
           ``,
           `⏰ Urgency: ${diag.urgency || 'Monitor'}`
         ]
+        if (diag.treatment) parts.push('', diag.treatment)
         setMessages(prev => [...prev, { role: 'bot', text: parts.join('\n') }])
       } else {
         setMessages(prev => [...prev, { role: 'bot', text: '❌ Error analyzing image: ' + (data.detail || 'Unknown error. Please try again.') }])
@@ -225,7 +235,7 @@ function Chat({ user }) {
 
       mediaRecorder.start()
       setIsRecording(true)
-    } catch (err) {
+    } catch {
       alert("Could not access microphone.")
     }
   }
@@ -242,32 +252,21 @@ function Chat({ user }) {
     setLoading(true)
 
     const formData = new FormData()
-    formData.append('user_id', user.user_id)
     formData.append('audio', audioBlob, 'voice.webm')
 
     try {
-      const res = await fetch(`${API_URL}/voice`, {
+      const res = await api(`${API_URL}/voice`, {
         method: 'POST',
         body: formData
       })
       
       if (res.ok) {
-        // If it's audio, play it and show the transcription if provided in headers/etc
-        const contentType = res.headers.get("content-type") || ""
-        if (contentType.includes("audio")) {
-          const blob = await res.blob()
-          const audioUrl = URL.createObjectURL(blob)
-          const audio = new Audio(audioUrl)
-          audio.play()
-          setMessages(prev => [...prev, { role: 'bot', text: '🔊 Audio response received (playing...)' }])
-        } else {
-          const data = await res.json()
-          setMessages(prev => [...prev, { role: 'bot', text: data.response || data.transcribed }])
-        }
+        const data = await res.json()
+        setMessages(prev => [...prev, { role: 'bot', report: data.advisory, text: data.response, transcript: data.transcribed, audio: data.audio_base64 }])
       } else {
         setMessages(prev => [...prev, { role: 'bot', text: 'Failed to process voice.' }])
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: 'bot', text: 'Error connecting to backend for voice.' }])
     }
     setLoading(false)
@@ -281,7 +280,7 @@ function Chat({ user }) {
             <div className="avatar">🌱</div>
             <div className="header-text">
               <h2>Agri-Bot</h2>
-              <p>Active</p>
+              <p>Farm advisory</p>
             </div>
           </div>
           <div className="header-info" style={{ flexDirection: 'row-reverse' }}>
@@ -291,7 +290,11 @@ function Chat({ user }) {
               <p style={{ color: '#cbd5e1', justifyContent: 'flex-end' }}>{user.crop} • {user.city}</p>
             </div>
           </div>
+          <button className="access-link" onClick={signOut}>Sign out</button>
         </header>
+        <label className="photo-language">Photo advice language <select value={photoLanguage} onChange={event => setPhotoLanguage(event.target.value)}>
+          {Object.entries({en:'English', hi:'हिन्दी', mr:'मराठी', ta:'தமிழ்', te:'తెలుగు', bn:'বাংলা', kn:'ಕನ್ನಡ', gu:'ગુજરાતી', ml:'മലയാളം', pa:'ਪੰਜਾਬੀ', ur:'اردو'}).map(([code,label]) => <option key={code} value={code}>{label}</option>)}
+        </select></label>
         
         <main className="chat-messages">
           {messages.map((msg, i) => (
@@ -303,7 +306,9 @@ function Chat({ user }) {
                   className="message-image"
                 />
               )}
-              {msg.text}
+              {msg.transcript && <p><strong>Heard:</strong> {msg.transcript}</p>}
+              {msg.report ? <article><h3>{msg.report.title}</h3>{msg.report.sections.map((part, index) => <section key={index}><h4>{part.heading}</h4><p>{part.body}</p></section>)}</article> : msg.text}
+              {msg.audio && <audio controls preload="none" src={'data:audio/mpeg;base64,' + msg.audio} />}
             </div>
           ))}
           {loading && (
@@ -332,7 +337,7 @@ function Chat({ user }) {
           
           <input 
             className="chat-input" 
-            placeholder="Type your question..." 
+            placeholder="Ask a question, or name the crop before attaching a photo..."
             value={input}
             onChange={e => setInput(e.target.value)}
             disabled={loading || isRecording}

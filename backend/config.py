@@ -8,11 +8,14 @@ GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY")
 OPENWEATHER_KEY = os.getenv("OPENWEATHER_API_KEY", os.getenv("OPENWEATHER_KEY"))
 
 # Used by google-generativeai (ai_service, image_service, etc.)
-AI_MODEL = "gemini-3.6-flash"
+AI_MODEL = os.getenv("AI_MODEL", "gemini-3.6-flash")
 
 # Used by LangGraph agent via init_chat_model — format: "provider/model-name"
 # To switch models, just change this one line, e.g.:
 #   "openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022", "groq/llama-3.3-70b-versatile"
-AGENT_MODEL = "google_genai/gemini-3.6-flash"
+AGENT_MODEL = os.getenv("AGENT_MODEL", f"google_genai/{AI_MODEL}")
+
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", AGENT_MODEL)
+AUDIO_MODEL = os.getenv("AUDIO_MODEL", AGENT_MODEL)
 
 MAX_HISTORY = 10

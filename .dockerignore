@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+**/.env
+**/.env.*
+**/farmers.db
+vector_index
+backend/database/chroma_db

@@ -1,0 +1,17 @@
+.access-card { width: min(92vw, 29rem); padding: clamp(1.6rem, 5vw, 3rem); background: #faf9ef; color: #193829; border-radius: 18px; box-shadow: 0 16px 70px #001b1670; }
+.access-card h1 { margin: .8rem 0; font: 600 clamp(2rem, 6vw, 3rem)/1.04 Georgia, serif; }
+.access-card p { line-height: 1.5; color: #405446; }
+.eyebrow { font: 700 .74rem system-ui; letter-spacing: .16em; }
+.access-card form { display: grid; gap: 1rem; margin: 1.7rem 0 1rem; }
+.access-card label { display: grid; gap: .45rem; font-weight: 600; }
+.access-card input { width: 100%; border: 1px solid #829889; border-radius: 8px; padding: .8rem; font: inherit; }
+.access-link { background: transparent; border: none; color: inherit; text-decoration: underline; cursor: pointer; padding: .4rem; font: inherit; }
+.access-card [role=alert] { color: #903622; }
+#root .app-container { background: #142e27; border-radius: 18px; }
+#root .onboarding-screen { overflow-y: auto; justify-content: safe center; }
+#root .message.bot { background: #eff4e9; color: #203c30; }
+@media(max-width:600px) { #root .app-container { width: 100%; height: 100dvh; border-radius: 0; } #root .chat-header { flex-wrap: wrap; gap: .4rem; } }
+.photo-language { padding: .45rem 1rem; font-size: .85rem; }
+.photo-language select { margin-left: .4rem; border-radius: .3rem; padding: .2rem; }
+.message article section, .message audio { margin-top: .7rem; }
+.message audio { max-width: 100%; }

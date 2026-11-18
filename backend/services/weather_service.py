@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 import requests
 from config import OPENWEATHER_KEY
 
@@ -14,7 +15,7 @@ def _fetch_weather(city: str) -> dict | None:
     try:
         # ── Step 1: Geocode city → lat/lon ────────────────────────────────
         geo_resp = requests.get(
-            "http://api.openweathermap.org/geo/1.0/direct",
+            "https://api.openweathermap.org/geo/1.0/direct",
             params={
                 "q":     f"{city},India",
                 "limit": 1,
@@ -74,21 +75,17 @@ def _fetch_weather(city: str) -> dict | None:
         else:
             f_data = f_resp.json()
             forecast_lines = []
-            seen_dates     = set()
+            local_zone = timezone(timedelta(seconds=f_data["city"]["timezone"]))
 
             for item in f_data.get("list", []):
-                date = item["dt_txt"].split(" ")[0]
-                if date not in seen_dates:
-                    seen_dates.add(date)
-                    rain_mm  = item.get("rain", {}).get("3h", 0)
-                    rain_str = f", 🌧 Rain: {rain_mm}mm" if rain_mm else ""
-                    forecast_lines.append(
-                        f"{date}: {item['main']['temp']}°C, "
-                        f"{item['weather'][0]['description'].title()}"
-                        f"{rain_str}"
-                    )
+                local = datetime.fromtimestamp(item["dt"], local_zone)
+                forecast_lines.append(
+                    f"{local:%Y-%m-%d %H:%M}: {item['main']['temp']}°C, "
+                    f"{item['weather'][0]['description']}, "
+                    f"{item.get('rain', {}).get('3h', 0)} mm/3h"
+                )
 
-            forecast_summary = "\n".join(forecast_lines[:5])
+            forecast_summary = "\n".join(forecast_lines) or "Forecast unavailable"
 
         return {
             "city":        city_name,

@@ -1,31 +1,17 @@
-import os
-from langchain.chat_models import init_chat_model
+from functools import lru_cache
 from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+from langchain_core.messages import SystemMessage
 from .state import FarmerState
 from .tools import search_treatments_tool, get_weather_tool, search_schemes_tool
-from langchain_core.messages import SystemMessage
-from langgraph.prebuilt import ToolNode
-from config import AGENT_MODEL
+from services.model_runtime import model
 
-# Ensure the API key is set in the environment for the provider
-os.environ.setdefault("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
 
-# ── LLM initialisation ────────────────────────────────────────────────────────
-# init_chat_model reads the provider from the "provider/model" string in config.
-# To switch models, change AGENT_MODEL in config.py — no code changes needed.
-# Examples:
-#   "google_genai/gemini-2.0-flash"
-#   "openai/gpt-4o"
-#   "anthropic/claude-3-5-sonnet-20241022"
-#   "groq/llama-3.3-70b-versatile"
 tools = [search_treatments_tool, get_weather_tool, search_schemes_tool]
 
-# Split "provider/model-name" into separate args for init_chat_model
-_parts = AGENT_MODEL.split("/", 1)
-_provider = _parts[0] if len(_parts) == 2 else None
-_model_name = _parts[1] if len(_parts) == 2 else AGENT_MODEL
-
-llm = init_chat_model(_model_name, model_provider=_provider).bind_tools(tools)
+@lru_cache(maxsize=1)
+def advisory_model():
+    return model().bind_tools(tools)
 tool_node = ToolNode(tools)
 
 
@@ -46,14 +32,32 @@ The farmer you are talking to:
 - Location: {state.get('location', 'Unknown')}
 - Main crop: {state.get('crop', 'Unknown')}
 
+Answer only farming, crops, soils, agricultural schemes, and farm weather questions.
+Decline unrelated parts without answering them. Use previous notes only for relevant follow-ups.
+For beginners give practical steps for this week and a useful next check-in based on known crop stage.
+For soil suitability ask about texture, drainage, irrigation, season and any pH or soil test results.
+Never claim to know a field's soil from its city or weather. Distinguish conditional suggestions from measured soil facts.
 Always personalize your advice based on their location and crop.
 If asked for disease treatment, ALWAYS use the `search_treatments_tool`. Do not suggest pesticide brands yourself.
-If asked for weather advice, use `get_weather_tool`.
+Use English crop and issue names for retrieval, regardless of the reply language.
+Only mention treatments present in matching tool results. Include their source labels.
+If there is no match, say the collection has no matching record; do not improvise a substitute.
+For any weather question, even just "weather?", call get_weather_tool for the profile location unless
+the farmer names another place. Use the profile crop unless the farmer specifies another crop.
+Give three short sections: local conditions and forecast for the requested period; what those
+conditions mean for the named crop; and one or two practical field checks or actions.
+Connect each action to a reported condition. Do not assume soil moisture, irrigation needs,
+crop stage or disease presence. If stage matters, ask one follow-up after giving useful advice.
+If live data is missing, say exactly what is unavailable; never invent weather or a spraying window.
 If asked for government schemes, use `search_schemes_tool`.
 Respond in the same language the farmer is using.
+Use the farmer's language for headings and values. For the final answer return only JSON
+with a nonempty string title and a sections array of objects containing nonempty heading and body strings.
+For symptoms separate likely causes, uncertainty and next steps. Never claim a confirmed diagnosis.
+For schemes separate relevant resources, what to verify and how to apply; retain official URLs.
 Keep answers under 250 words.
 """)
-    response = llm.invoke([system_prompt] + messages)
+    response = advisory_model().invoke([system_prompt] + messages)
     return {"messages": [response]}
 
 

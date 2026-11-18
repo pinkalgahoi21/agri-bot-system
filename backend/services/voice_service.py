@@ -15,10 +15,8 @@ log = logging.getLogger(__name__)
 
 # ── Gemini API client (for STT) ────────────────────────────────────────────────
 
-import google.generativeai as genai
-from config import GOOGLE_API_KEY, AI_MODEL
-
-genai.configure(api_key=GOOGLE_API_KEY)
+from services.model_runtime import generate
+from config import AUDIO_MODEL
 
 
 # ── Language resolution ────────────────────────────────────────────────────────
@@ -134,17 +132,9 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
         with open(audio_file_path, "rb") as f:
             audio_bytes = f.read()
 
-        audio_part = {"mime_type": "audio/wav", "data": audio_bytes}
-
-        model = genai.GenerativeModel(model_name=AI_MODEL)
-        result = model.generate_content([
-            "Transcribe this audio exactly as spoken. "
-            "Return ONLY the transcription text, nothing else. "
-            "Also detect the spoken language and include it at the very end as: [lang: <ISO 639-1 code>]",
-            audio_part,
-        ])
-
-        raw = result.text.strip()
+        raw = generate("Transcribe the spoken language without translating or answering.",
+                       "Return the transcript followed by [lang: ISO language code].",
+                       spec=AUDIO_MODEL, media=("audio", "audio/wav", audio_bytes), max_tokens=1600)
 
         # Extract language tag if present
         language = "en"
@@ -160,7 +150,7 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
             log.warning("Empty transcription for: %s", audio_file_path)
             return None, None
 
-        log.info("Transcribed: '%s' | language: %s", text[:80], language)
+        log.info("Transcription completed")
         return text, language
 
     except Exception as e:
