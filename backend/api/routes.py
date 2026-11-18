@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from api.auth import identity
 from services.advisory import offline_answer, parse_answer
 from services.treatment_flow import assess
+from services.weather_service import profile_weather
 from services.farm_memory import recall, remember
 import json
 from services.language_service import normalize_language
@@ -37,6 +38,9 @@ def chat(request: ChatRequest, user_id: int = Depends(identity), db: Session = D
 
 
 def advise(db, farmer, message):
+    weather = profile_weather(message, farmer.city or farmer.location, farmer.crop)
+    if weather is not None:
+        return weather
     previous, revision = recall(db, farmer)
     contextual = json.dumps({"prior_farm_note": previous, "current_request": message}, ensure_ascii=False) if previous else message
     state = {

@@ -1,4 +1,6 @@
 import asyncio
+import re
+from services.advisory import pack
 from datetime import datetime, timedelta, timezone
 import requests
 from config import OPENWEATHER_KEY
@@ -104,6 +106,24 @@ def _fetch_weather(city: str) -> dict | None:
     except Exception as e:
         print(f"[weather] Fetch error: {e}")
         return None
+
+
+def profile_weather(message, city, crop):
+    question = " ".join(message.lower().strip(" .?!").split())
+    if not re.fullmatch(r"(?:(?:how(?:'s|s| is)|what(?:'s|s| is)) (?:the )?)?(?:weather|forecast)(?: today)?(?: for (?:my |the )?" + re.escape(crop.strip().lower()) + r")?(?: today)?", question):
+        return None
+    data = _fetch_weather(city)
+    if not data:
+        return pack(f"Weather unavailable for {city}", [{"heading": "Next step", "body": "I couldn't retrieve live conditions. Check your profile city and try again shortly."}], True)
+    check = ("Check for standing water and make sure drainage channels are clear." if data["rain"] > 0
+             else "Check moisture in the root zone before deciding whether to irrigate; dry air alone does not mean the soil is dry.")
+    if crop.strip().lower() == "wheat":
+        check += " Is your wheat at sowing, flowering, or grain filling? Its stage matters for irrigation advice."
+    return pack(f"Weather for {crop} in {data['city']}", [
+        {"heading": "Right now", "body": f"{data['temp']}°C, {data['description']}; humidity {data['humidity']}%, wind {data['wind_speed']} m/s."},
+        {"heading": "Upcoming forecast (local time)", "body": "\n".join(data["forecast"].splitlines()[:4])},
+        {"heading": f"For your {crop}", "body": check},
+    ])
 
 
 async def get_weather(city: str) -> dict | None:
