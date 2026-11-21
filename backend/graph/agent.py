@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage
 from .state import FarmerState
 from .tools import search_treatments_tool, get_weather_tool, search_schemes_tool
 from services.model_runtime import model
+from services.treatment_flow import assess
 
 
 tools = [search_treatments_tool, get_weather_tool, search_schemes_tool]
@@ -69,7 +70,14 @@ workflow.add_node("agent", call_model)
 workflow.add_node("tools", tool_node)
 
 # Set entry point
-workflow.set_entry_point("agent")
+def intent_router(state):
+    return {"assessment": assess(state["request"], state["crop"], state.get("image", False), state.get("previous", ""))}
+
+
+workflow.add_node("intent_router", intent_router)
+workflow.set_entry_point("intent_router")
+workflow.add_conditional_edges("intent_router", lambda state: "agent" if state["assessment"] is None else END,
+                               {"agent": "agent", END: END})
 
 # Add edges
 workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})

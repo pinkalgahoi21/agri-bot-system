@@ -127,7 +127,13 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
     Returns (text, language_iso_code) or (None, None) on failure.
     """
     try:
-        log.info("Transcribing via Gemini API: %s", audio_file_path)
+        provider = os.getenv("STT_PROVIDER") or ("groq" if AUDIO_MODEL.startswith("groq/") else "gemini")
+        if provider == "groq":
+            from groq import Groq
+            with open(audio_file_path, "rb") as audio:
+                transcript = Groq(timeout=45, max_retries=1).audio.transcriptions.create(
+                    file=audio, model=os.getenv("WHISPER_MODEL", "whisper-large-v3-turbo"), response_format="verbose_json")
+            return transcript.text.strip() or None, transcript.language
 
         with open(audio_file_path, "rb") as f:
             audio_bytes = f.read()

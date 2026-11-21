@@ -42,7 +42,7 @@ def bot_post(user_id, url, **kwargs):
     return requests.post(url, headers=headers, timeout=120, **kwargs)
 
 # States for Onboarding
-ASK_NAME, ASK_CITY, ASK_CROP = range(3)
+ASK_NAME, ASK_CITY, ASK_CROP, ASK_DETAILS = range(4)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
@@ -63,7 +63,17 @@ async def ask_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ASK_CROP
 
 async def ask_crop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    crop = update.message.text
+    context.user_data["crop"] = update.message.text
+    await update.message.reply_text("Send state, current crop stage, preferred language, and optional land size separated by commas. Example: Bihar, flowering, Hindi, 2 acres")
+    return ASK_DETAILS
+
+
+async def ask_details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    fields = [field.strip() for field in update.message.text.split(",", 3)]
+    if len(fields) < 3:
+        await update.message.reply_text("Please include state, stage and language, separated by commas.")
+        return ASK_DETAILS
+    crop = context.user_data["crop"]
     user_id = update.effective_user.id
     name = context.user_data["name"]
     city = context.user_data["city"]
@@ -76,7 +86,8 @@ async def ask_crop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 "name": name,
                 "city": city,
                 "location": city,
-                "crop": crop
+                "crop": crop, "state": fields[0], "stage": fields[1], "language": fields[2],
+                "land_size": fields[3] if len(fields) > 3 else "",
             }
         )
 
@@ -98,7 +109,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
-    text = update.message.text
+    text = {"/weather": "Weather for my farm", "/schemes": "Find agricultural schemes for my farm"}.get(update.message.text, update.message.text)
     
     try:
         def post_chat():
@@ -236,6 +247,8 @@ def setup_bot_application(token: str) -> Application:
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command),
+            CommandHandler(["profile", "crop"], start_command),
+            CommandHandler(["weather", "schemes"], handle_message),
             MessageHandler(filters.PHOTO, handle_photo),
             MessageHandler(filters.VOICE, handle_voice),
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
@@ -244,6 +257,7 @@ def setup_bot_application(token: str) -> Application:
             ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name)],
             ASK_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_city)],
             ASK_CROP: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_crop)],
+            ASK_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_details)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )

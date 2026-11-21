@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from database.database import get_db
-from database.models import LoginSession, Farmer
+from database.models import LoginSession, Farmer, CropProfile
 
 router = APIRouter()
 
@@ -44,4 +44,10 @@ def identity(request: Request, credentials: HTTPAuthorizationCredentials = Depen
 @router.get('/profile')
 def profile(user_id: int = Depends(identity), db: Session = Depends(get_db)):
     farmer = db.get(Farmer, user_id)
-    return {'profile': {key: getattr(farmer, key) for key in ('name', 'city', 'crop')} if farmer else None}
+    if not farmer:
+        return {"profile": None}
+    fields = {key: getattr(farmer, key) for key in ("name", "city", "crop")}
+    details = db.get(CropProfile, user_id)
+    if details:
+        fields.update({key: getattr(details, key) for key in ("state", "stage", "language", "land_size")})
+    return {"profile": fields}

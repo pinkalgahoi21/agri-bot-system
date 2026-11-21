@@ -1,0 +1,12 @@
+services:
+  agribot:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////storage/farmers.db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - farmers:/storage
+volumes:
+  farmers:

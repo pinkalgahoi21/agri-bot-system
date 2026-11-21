@@ -17,6 +17,10 @@ def generate(system, prompt, *, spec=AGENT_MODEL, temperature=0.4, max_tokens=60
     content = prompt
     if media:
         kind, mime, payload = media
-        content = [{"type": "text", "text": prompt}, {"type": kind, "base64": base64.b64encode(payload).decode("ascii"), "mime_type": mime}]
+        encoded = base64.b64encode(payload).decode("ascii")
+        block = {"type": kind, "base64": encoded, "mime_type": mime}
+        if kind == "image" and spec.startswith("groq/"):
+            block = {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}}
+        content = [{"type": "text", "text": prompt}, block]
     result = model(spec, temperature=temperature, max_tokens=max_tokens).invoke([SystemMessage(content=system), HumanMessage(content=content)])
     return result.text.strip()

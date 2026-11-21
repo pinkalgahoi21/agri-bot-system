@@ -70,7 +70,7 @@ def signup(data: Credentials, db: Session = Depends(get_db)):
         db.flush()
         requests.post("https://api.resend.com/emails", headers={"Authorization": "Bearer " + key},
                       json={"from": sender, "to": [email], "subject": "Verify your Agri-Bot account",
-                            "text": f"Your signup code is {code}. It expires in 10 minutes."}, timeout=10).raise_for_status()
+                            "text": f"Your signup code is {code}. It expires in 5 minutes."}, timeout=10).raise_for_status()
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -84,7 +84,7 @@ def signup(data: Credentials, db: Session = Depends(get_db)):
 @router.post("/verify")
 def verify(data: Confirmation, db: Session = Depends(get_db)):
     row = db.query(LoginAccount).filter_by(email=data.email.strip().lower()).with_for_update().first()
-    if not row or not row.challenge or row.attempts >= 5 or time.time() - row.issued >= 600:
+    if not row or not row.challenge or row.attempts >= 5 or time.time() - row.issued >= 300:
         raise HTTPException(400, "Invalid or expired challenge")
     if not hmac.compare_digest(row.challenge, digest(data.ticket + data.token)):
         row.attempts += 1

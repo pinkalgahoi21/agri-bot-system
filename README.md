@@ -1,5 +1,11 @@
 For the authenticated website and Telegram deployment, start with [the redeployment guide](REDEPLOY.md).
 
+## Current setup
+
+Copy `.env.example` to `.env` and configure your model and services. Run `docker compose up --build` and open `http://localhost:8000`. Use a separate Telegram token with `TELEGRAM_POLLING=1` locally, or set an HTTPS `WEBHOOK_URL` on the deployed service. For local Python development install `backend/requirements.txt` in a virtual environment (Python 3.12 recommended), then start `uvicorn main:app` from backend.
+
+Drop reference PDFs, TXT, Markdown, CSV or DOCX files in `data/knowledge/`. From the repository root run `python scripts/ingest.py`; use `--reset` only to discard and rebuild the index. Set `RAG_MAX_DISTANCE` for the maximum cosine distance. Under backend run `python -m unittest discover -v`; from the root run `python scripts/eval.py` for the live model routing check (consumes quota). See [architecture](docs/ARCHITECTURE.md), [audit](docs/AUDIT.md) and [changes](docs/CHANGES.md).
+
 <div align="center">
   
 # 🌱 Kisan AI Advisor (Agri-Bot System)

@@ -2,7 +2,7 @@ from langchain_core.tools import tool
 from services.rag_service import search_rag
 from services.vector_rag import search_pdf
 import logging
-from services.search_service import search_schemes
+from services.search_service import live_schemes
 from services.weather_service import _fetch_weather
 
 @tool
@@ -45,12 +45,12 @@ def get_weather_tool(city: str) -> str:
             f"rain in past hour {weather['rain']} mm.\nForecast (local time): {weather['forecast']}")
 
 @tool
-def search_schemes_tool(crop: str, location: str) -> str:
+def search_schemes_tool(crop: str, location: str, topic: str = "agricultural schemes") -> str:
     """
     Provides official government scheme discovery and crop insurance portals for the farmer.
     Use this tool when the user asks about subsidies, schemes, or financial help.
     """
-    results = search_schemes(crop, location)
+    results = live_schemes(crop, location, topic)
     if not results:
         return "No recent schemes found."
     return results

@@ -34,6 +34,7 @@ function Onboarding({ setUser }) {
     data.append('city', formData.city)
     data.append('location', formData.city)
     data.append('crop', formData.crop)
+    for (const key of ['state', 'stage', 'language', 'land_size']) data.append(key, formData[key] || '')
 
     try {
       const res = await api(`${API_URL}/profile`, {
@@ -90,6 +91,11 @@ function Onboarding({ setUser }) {
             />
           </div>
           
+          {Object.entries({state:'State', language:'Preferred language', land_size:'Land size (optional)'}).map(([key,label]) =>
+            <label key={key}>{label}<input className="glass-input" value={formData[key] || ''} onChange={event => setFormData({...formData,[key]:event.target.value})} /></label>)}
+          <label>Crop stage<select value={formData.stage || ''} onChange={event => setFormData({...formData,stage:event.target.value})}>
+            <option value="">Not sure</option>{['land preparation','sowing','germination','vegetative','flowering','fruiting','harvesting','post-harvest'].map(stage => <option key={stage}>{stage}</option>)}
+          </select></label>
           <button type="submit" className="primary-btn" disabled={loading}>
             {loading ? 'Creating Profile...' : 'Start Chatting'}
           </button>
@@ -105,6 +111,15 @@ function Chat({ user }) {
     { role: 'bot', text: `Hello ${user.name}! I'm ready to help you with your ${user.crop} crop in ${user.city}. How can I assist you today?` }
   ])
   const [input, setInput] = useState('')
+  useEffect(() => {
+    const abort = new AbortController()
+    api(API_URL + '/chat/history', {signal: abort.signal}).then(async response => {
+      if (!response.ok) return
+      const data = await response.json()
+      if (!abort.signal.aborted && data.messages.length) setMessages(previous => [...previous.slice(0, 1), ...data.messages, ...previous.slice(1)])
+    }).catch(() => {})
+    return () => abort.abort()
+  }, [])
   const [photo, setPhoto] = useState(null)
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.url) }, [photo])
   const [loading, setLoading] = useState(false)

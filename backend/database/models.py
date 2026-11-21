@@ -47,6 +47,15 @@ class FarmMemory(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class CropProfile(Base):
+    __tablename__ = "crop_profiles"
+    user_id = Column(BigInteger, ForeignKey("farmers.user_id", ondelete="CASCADE"), primary_key=True)
+    state = Column(String(100), default="")
+    stage = Column(String(40), default="")
+    language = Column(String(60), default="")
+    land_size = Column(String(60), default="")
+
+
 class History(Base):
     __tablename__ = "history"
 

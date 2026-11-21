@@ -13,7 +13,7 @@ AI_MODEL = os.getenv("AI_MODEL", "gemini-3.6-flash")
 # Used by LangGraph agent via init_chat_model — format: "provider/model-name"
 # To switch models, just change this one line, e.g.:
 #   "openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022", "groq/llama-3.3-70b-versatile"
-AGENT_MODEL = os.getenv("AGENT_MODEL", f"google_genai/{AI_MODEL}")
+AGENT_MODEL = os.getenv("AGENT_MODEL") or ("groq/meta-llama/llama-4-scout-17b-16e-instruct" if os.getenv("GROQ_API_KEY") else f"google_genai/{AI_MODEL}")
 
 IMAGE_MODEL = os.getenv("IMAGE_MODEL", AGENT_MODEL)
 AUDIO_MODEL = os.getenv("AUDIO_MODEL", AGENT_MODEL)
