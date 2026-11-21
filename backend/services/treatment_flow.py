@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ValidationError, Field
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
-from services.model_runtime import model
+from app.core.llm import get_llm, invoke, QuotaExceeded
 
 from services.ai_service import _chat
 from services.advisory import pack
@@ -44,11 +44,11 @@ def assess(message, crop, image=False, previous=""):
         "the supplied confidence: low confidence means leave disease empty."
     )
     payload = json.dumps({"request": message, "previous_farm_note": previous, "profile_crop": crop, "image_assessment": image}, ensure_ascii=False)
-    classifier = model().with_structured_output(Classification)
+    classifier = get_llm("router").with_structured_output(Classification)
     messages = [SystemMessage(content=instructions), HumanMessage(content=payload)]
     for attempt in range(2):
         try:
-            item = Classification.model_validate(classifier.invoke(messages)).model_dump()
+            item = Classification.model_validate(invoke(classifier, messages, "router")).model_dump()
             break
         except (OutputParserException, ValidationError, json.JSONDecodeError):
             if attempt:
@@ -64,14 +64,28 @@ def assess(message, crop, image=False, previous=""):
     if item["kind"] == "farm" and not image:
         return None
     summary = item["summary"]
+    if not image and item["kind"] == "disease":
+        identifier = get_llm("vision").with_structured_output(Classification)
+        diagnosis_messages = [SystemMessage(content="Assess the described crop symptoms, including the previous conversation. Use common English crop and disease names for lookup. If confidence is low, leave disease empty, provide a localized summary and ask a targeted follow_up. Never prescribe at this stage."),
+                              HumanMessage(content=payload)]
+        for attempt in range(2):
+            try:
+                item = Classification.model_validate(invoke(identifier, diagnosis_messages, "vision")).model_dump()
+                summary = item["summary"]
+                break
+            except (ValidationError, OutputParserException, json.JSONDecodeError):
+                if attempt:
+                    item["disease"] = ""
     issue = item.get("disease", "").strip()
     plant = item.get("crop", "").strip()
     if not issue or not plant:
-        return pack(summary, [{"heading": "Next step", "body": "Diagnosis uncertain. Provide clearer symptoms or consult a local agricultural adviser before treatment."}])
+        return pack(summary, [{"heading": "Next step", "body": item.get("follow_up") or "Diagnosis uncertain. Provide clearer symptoms or consult a local agricultural adviser before treatment."}])
     issue = normalize_disease(issue.split("(")[0].strip())
     try:
         hits = search_pdf(issue, plant)
         hits = [{"metadata": hit["metadata"], "document": table_page(hit["metadata"]["source"], hit["metadata"]["page"]) or hit["document"]} for hit in hits]
+    except QuotaExceeded:
+        raise
     except Exception:
         logging.getLogger(__name__).warning("PDF search unavailable", exc_info=True)
         hits = []
@@ -90,7 +104,7 @@ def assess(message, crop, image=False, previous=""):
                     "is on a previous page, skip that entry. Do not give doses. Return JSON with index (zero-based passage number), "
                     "quote (verbatim supporting text, internal only) and advice (what the farmer can do next, "
                     "in the requested language; no quotes, filenames, page numbers or citations). "
-                    "If evidence is insufficient return {}. Do not invent application instructions.", context)
+                    "If evidence is insufficient return {}. Do not invent application instructions.", context, role="reasoning")
         try:
             evidence = json.loads(raw.strip().removeprefix("```json").removesuffix("```").strip())
             number = evidence['index']
@@ -106,7 +120,7 @@ def assess(message, crop, image=False, previous=""):
             pass
     advice = _chat("Give brief conservative nonchemical crop care steps for this suspected issue, in the "
                    "requested language. Do not promise a cure, suggest pesticide products or doses, "
-                   "or claim official verification. Recommend local confirmation.", json.dumps({"crop": plant, "issue": issue, "language": item["language"]}))
+                   "or claim official verification. Recommend local confirmation.", json.dumps({"crop": plant, "issue": issue, "language": item["language"]}), role="reasoning")
     return pack(summary, [{"heading": "Suggested care", "body": advice.strip()},
                           {"heading": "Next step", "body": "Photograph the affected leaves and ask your local agricultural extension office to confirm the cause before treating."},
                           {"heading": "Verification notice", "body": WARNING}], True)

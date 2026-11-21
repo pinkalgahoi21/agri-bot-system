@@ -1,6 +1,6 @@
 # Redeploy the website and Telegram bot
 
-Use the repository directory containing Dockerfile as the Render service root. The Docker build downloads the embedding model and indexes the PDFs. Do not mount an empty volume over /app/vector_index. Monitor RAM and request latency on staging. Local polling is opt-in: only use TELEGRAM_POLLING=1 with a separate test bot token.
+Use the repository directory containing Dockerfile as the Render service root. Startup verifies the document fingerprint, embedding configuration and indexed passage count. A matching bundled reference index restores without embedding API calls. Otherwise startup builds from the PDFs and consumes embedding quota. Monitor RAM and request latency on staging. Local polling is opt-in: only use TELEGRAM_POLLING=1 with a separate test bot token.
 
 Build the root Dockerfile; it bundles the React site and serves it at / on the same origin as /api. For local frontend development run Vite with FastAPI on port 8000. No VITE_API_URL is necessary.
 

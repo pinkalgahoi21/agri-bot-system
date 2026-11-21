@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from services.treatment_flow import Classification, model
+from services.treatment_flow import Classification, get_llm
 from langchain_core.messages import HumanMessage, SystemMessage
 
 CASES = {
@@ -20,13 +20,13 @@ if __name__ == "__main__":
     for expected, queries in CASES.items():
         for query in queries:
             captured = []
-            original = model().with_structured_output(Classification)
+            original = get_llm("router").with_structured_output(Classification)
             def predict(messages):
                 prediction = original.invoke(messages)
                 captured.append(prediction.kind)
                 return prediction
             try:
-                with patch("services.treatment_flow.model") as factory, patch("services.treatment_flow.search_pdf", return_value=[]), patch("services.treatment_flow._chat", return_value="Evaluation"):
+                with patch("services.treatment_flow.get_llm") as factory, patch("services.treatment_flow.search_pdf", return_value=[]), patch("services.treatment_flow._chat", return_value="Evaluation"):
                     factory.return_value.with_structured_output.return_value.invoke.side_effect = predict
                     assess(query, "rice")
                 passed = captured == [expected]

@@ -12,7 +12,7 @@ from services.treatment_flow import Classification, assess
 
 class ClassificationTests(unittest.TestCase):
     @patch("services.farm_memory._chat", side_effect=AssertionError("No second model call needed"))
-    @patch("services.treatment_flow.model")
+    @patch("services.treatment_flow.get_llm")
     def test_follow_up_routes_with_persisted_question(self, model, summarizer):
         engine = create_engine("sqlite://")
         Base.metadata.create_all(engine)
@@ -41,7 +41,7 @@ class ClassificationTests(unittest.TestCase):
         summarizer.assert_not_called()
         engine.dispose()
 
-    @patch("services.treatment_flow.model")
+    @patch("services.treatment_flow.get_llm")
     def test_malformed_then_valid(self, model):
         invoke = model.return_value.with_structured_output.return_value.invoke
         invoke.side_effect = [OutputParserException("Invalid JSON"), Classification(
@@ -50,7 +50,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(invoke.call_count, 2)
         model.return_value.with_structured_output.assert_called_once_with(Classification)
 
-    @patch("services.treatment_flow.model")
+    @patch("services.treatment_flow.get_llm")
     def test_invalid_fields_never_trigger_treatment(self, model):
         invoke = model.return_value.with_structured_output.return_value.invoke
         invoke.return_value = {"kind": "unexpected"}

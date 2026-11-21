@@ -1,3 +1,5 @@
+# Agri-Bot
+
 For the authenticated website and Telegram deployment, start with [the redeployment guide](REDEPLOY.md).
 
 ## Current setup
@@ -6,109 +8,12 @@ Copy `.env.example` to `.env` and configure your model and services. Run `docker
 
 Drop reference PDFs, TXT, Markdown, CSV or DOCX files in `data/knowledge/`. From the repository root run `python scripts/ingest.py`; use `--reset` only to discard and rebuild the index. Set `RAG_MAX_DISTANCE` for the maximum cosine distance. Under backend run `python -m unittest discover -v`; from the root run `python scripts/eval.py` for the live model routing check (consumes quota). See [architecture](docs/ARCHITECTURE.md), [audit](docs/AUDIT.md) and [changes](docs/CHANGES.md).
 
-<div align="center">
-  
-# 🌱 Kisan AI Advisor (Agri-Bot System)
+## Model configuration
 
-**An Enterprise-Grade, Autonomous AI Advisory Platform for Indian Agriculture**
+The website and Telegram share the LangGraph backend. Set GOOGLE_API_KEY for Gemini chat, vision, audio transcription and embeddings. The shipped model IDs are in model.defaults.env. LLM_MODEL_ROUTER, LLM_MODEL_VISION and LLM_MODEL_REASONING inherit LLM_MODEL_DEFAULT when unset. A qualified LLM_MODEL_DEFAULT such as provider:model switches the default provider and model together. Install the matching LangChain integration and configure its credentials before switching. A replacement for the vision or speech model must accept the corresponding input type.
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
-[![LangGraph](https://img.shields.io/badge/LangGraph-AI_Agents-FF9900.svg)](https://python.langchain.com/v0.1/docs/langgraph/)
-[![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?style=flat&logo=react)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF.svg?style=flat&logo=vite)](https://vitejs.dev/)
+The router uses temperature zero. LLM_TEMPERATURE controls other roles. LLM_TIMEOUT is in seconds. LLM_MAX_RETRIES controls the bounded rate-limit retry loop. Set LANGSMITH_TRACING=true and LANGSMITH_API_KEY to opt into hosted tracing of model interactions. Local logs record model timing and token counts when the provider reports them.
 
-*Leveraging state-of-the-art LLMs, Vision models, and RAG to democratize agricultural intelligence.*
+Voice uses Gemini audio transcription and gTTS synthesis. Language and voice availability depend on the provider. Whisper is not required.
 
-</div>
-
----
-
-## 🚀 Overview
-
-The **Agri-Bot System** is a next-generation AI platform designed to provide Indian farmers with hyper-local, multilingual, and scientifically accurate farming advice. 
-
-Traditional agricultural advisory systems rely on slow manual intervention. This platform utilizes **LangGraph-driven autonomous agents** and **Retrieval-Augmented Generation (RAG)** to instantly diagnose crop diseases, recommend safe chemical treatments, and provide live weather forecasting—all delivered seamlessly through a beautiful web interface or a Telegram Bot.
-
----
-
-## ✨ Core AI Capabilities
-
-### 🧠 Agentic Routing (LangGraph)
-Powered by a `llama3-70b` model, the system uses LangGraph to autonomously route user queries to the correct specialized tools (Weather API, Scheme Search, or Vector Database) rather than relying on brittle rule-based logic.
-
-### 🛡️ Hallucination-Free Recommendations (RAG)
-To prevent the AI from hallucinating dangerous chemical treatments, the system is backed by a **ChromaDB Vector Store** populated with official agricultural safety manuals. The AI is strictly instructed to query the Vector DB for verified medicine and pesticide recommendations.
-
-### 👁️ Computer Vision Diagnostics
-Farmers can upload images of diseased crops. The system routes the image through **Groq Vision**, performing zero-shot disease classification and returning actionable prevention strategies.
-
-### 🗣️ Multilingual Voice Synthesis
-Built for accessibility, the system supports voice-first interactions. It transcribes regional Indian dialects using **OpenAI Whisper**, processes the request via the LLM, and synthesizes a localized audio response using **gTTS**.
-
----
-
-## 🏗️ System Architecture
-
-The platform is built on a decoupled, microservice-oriented architecture to ensure scalability and ease of deployment.
-
-```mermaid
-graph TD
-    User([🌾 Farmer])
-    
-    subgraph Interfaces
-        UI[💻 React Web App]
-        TG[📱 Telegram Bot Worker]
-    end
-    
-    subgraph Core AI Engine [FastAPI Backend]
-        Router{LangGraph Agent}
-        Voice[Whisper + gTTS Service]
-        Vision[Groq Vision Service]
-        
-        Router --> |Tool Node| Weather[OpenWeather API]
-        Router --> |Tool Node| Search[Gov Schemes Search]
-        Router --> |Tool Node| RAG[ChromaDB Vector Store]
-    end
-    
-    User <-->|Voice/Text/Image| TG
-    User <-->|HTTP/JSON| UI
-    
-    UI <--> Core
-    TG <--> Core
-```
-
----
-
-## 🛠️ Technology Stack
-
-| Component | Technology | Description |
-|-----------|------------|-------------|
-| **LLM Orchestration** | LangGraph & LangChain | Manages tool execution and stateful agent conversation. |
-| **Inference Engine** | Groq (`llama3-70b`) | Ultra-fast LPU inference for real-time chat and vision. |
-| **Vector Database** | ChromaDB | Embeds and retrieves localized agricultural manuals. |
-| **Backend Framework** | FastAPI | High-performance asynchronous REST API. |
-| **Frontend Framework** | React + Vite | Glassmorphic, highly responsive SPA for desktop and mobile. |
-| **Data Persistence** | SQLite | Lightweight storage for maintaining farmer profiles and session state. |
-
----
-
-## 🌍 Production Deployment
-
-This repository is configured for seamless deployment on modern PaaS infrastructure using Infrastructure-as-Code (IaC).
-
-### 1. Render (Backend & Telegram Proxy)
-The backend and telegram proxy are orchestrated via the `render.yaml` blueprint. They run concurrently within a single free-tier Web Service.
-- **Environment Variables Required:** `GROQ_API_KEY`, `OPENWEATHER_API_KEY`, `TELEGRAM_TOKEN`
-- **Start Command:** Automatically handled by `start.sh`.
-
-### 2. Vercel (Frontend Web App)
-The Vite SPA is optimized for Vercel's edge network.
-- **Root Directory:** `./frontend`
-- **Environment Variables Required:** `VITE_API_URL` (Pointing to the Render backend)
-
----
-
-<div align="center">
-  <i>Built to empower the backbone of India. 🇮🇳</i>
-</div>
+The Chroma collection records the embedding provider and model. Changing either requires an explicit index rebuild with python scripts/ingest.py --reset. This replaces the collection and consumes embedding quota. Use persistent storage for VECTOR_DB_DIR when available. On ephemeral hosting the startup script can rebuild the index after storage is cleared. Set INGEST_ON_START=0 when supplying a prepared index.

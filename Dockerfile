@@ -20,7 +20,6 @@ COPY --from=website /site/dist /app/frontend/dist
 
 # Install dependencies using --no-cache-dir to prevent RAM exhaustion on Render free tier
 RUN pip install --no-cache-dir -r backend/requirements.txt
-RUN cd backend && python -m services.vector_rag
 
 # Ensure start script is executable
 RUN sed -i 's/\r$//' start.sh && chmod +x start.sh

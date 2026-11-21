@@ -18,7 +18,7 @@ jobs:
       - run: docker build -t agribot-ci .
       - run: docker run --rm --network host -e DATABASE_URL=postgresql://postgres:ci-only@localhost:5432/postgres -w /app/backend agribot-ci python -m unittest discover -v
       - run: |
-          docker run -d --name agribot --network host -e DATABASE_URL=postgresql://postgres:ci-only@localhost:5432/postgres agribot-ci
+          docker run -d --name agribot --network host -e INGEST_ON_START=0 -e DATABASE_URL=postgresql://postgres:ci-only@localhost:5432/postgres agribot-ci
           curl --fail --retry 20 --retry-delay 2 --retry-connrefused http://localhost:8000/health
           curl --fail http://localhost:8000/ > /dev/null
-          docker exec -w /app/backend agribot python -c "from services.vector_rag import index; assert index().count() > 0"
+          docker exec -w /app/backend agribot python -c "from services.vector_rag import KNOWLEDGE,chunks; assert next(chunks(KNOWLEDGE))"

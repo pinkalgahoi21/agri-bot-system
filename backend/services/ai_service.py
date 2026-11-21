@@ -5,8 +5,8 @@ All Google Gemini AI calls — chat, disease diagnosis, weather advice, RAG trea
 from __future__ import annotations
 from services.model_runtime import generate
 from pydantic import BaseModel, field_validator
-def _chat(system: str, user: str, temperature: float = 0.4, max_tokens: int = 600) -> str:
-    return generate(system, user, temperature=temperature, max_tokens=max_tokens)
+def _chat(system: str, user: str, temperature: float | None = None, max_tokens: int = 600, role: str = "default") -> str:
+    return generate(system, user, role=role, temperature=temperature, max_tokens=max_tokens)
 
 
 # ── Shared disease result schema ───────────────────────────────────────────────

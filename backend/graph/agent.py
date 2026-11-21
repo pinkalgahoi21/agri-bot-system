@@ -4,7 +4,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_core.messages import SystemMessage
 from .state import FarmerState
 from .tools import search_treatments_tool, get_weather_tool, search_schemes_tool
-from services.model_runtime import model
+from app.core.llm import get_llm, invoke
 from services.treatment_flow import assess
 
 
@@ -12,7 +12,7 @@ tools = [search_treatments_tool, get_weather_tool, search_schemes_tool]
 
 @lru_cache(maxsize=1)
 def advisory_model():
-    return model().bind_tools(tools)
+    return get_llm("default").bind_tools(tools)
 tool_node = ToolNode(tools)
 
 
@@ -59,7 +59,7 @@ For symptoms separate likely causes, uncertainty and next steps. Never claim a c
 For schemes separate relevant resources, what to verify and how to apply; retain official URLs.
 Keep answers under 250 words.
 """)
-    response = advisory_model().invoke([system_prompt] + messages)
+    response = invoke(advisory_model(), [system_prompt] + messages)
     return {"messages": [response]}
 
 

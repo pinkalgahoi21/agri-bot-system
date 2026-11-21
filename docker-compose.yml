@@ -8,5 +8,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - farmers:/storage
+      - embeddings:/app/vector_index
 volumes:
   farmers:
+  embeddings:

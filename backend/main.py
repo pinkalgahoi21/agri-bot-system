@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from database import database
 from database import models
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ app = FastAPI(title="Farmer Advisory API", version="1.0.0", lifespan=lifespan)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    revision = os.getenv("RENDER_GIT_COMMIT")
+    return {"status": "ok", "revision": revision} if revision else {"status": "ok"}
 
 from api.routes import router as api_router
 from api.bot_webhook import router as bot_router

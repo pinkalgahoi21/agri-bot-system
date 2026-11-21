@@ -21,7 +21,11 @@ from graph.agent import app as graph_app
 from langchain_core.messages import HumanMessage
 
 from services.image_service import analyze_crop_image
-from services.voice_service import convert_ogg_to_wav, transcribe_voice, text_to_speech, cleanup_file
+from services.voice_service import convert_ogg_to_wav, cleanup_file
+from services.stt import transcribe_voice
+from services.tts import text_to_speech
+from app.core.llm import QuotaExceeded
+from services.advisory import pack
 
 router = APIRouter()
 
@@ -73,9 +77,19 @@ def advise(db, farmer, message):
                         models.History(user_id=farmer.user_id, role="bot", content=assessment["response"])])
             db.commit()
         return assessment
+    except QuotaExceeded:
+        language = details.language if details else ""
+        notice = quota_message(language, message)
+        return pack(notice, [], True)
     except Exception:
         logging.getLogger(__name__).warning('Advisory unavailable', exc_info=True)
         return profile_weather(message, farmer.city or farmer.location, farmer.crop) or offline_answer(message, farmer.crop, farmer.location)
+
+
+def quota_message(language, message=""):
+    if (language or "").lower() in ("hi", "hindi", "हिन्दी") or any("\u0900" <= letter <= "\u097f" for letter in message):
+        return "अभी सेवा व्यस्त है। कृपया थोड़ी देर बाद फिर कोशिश करें।"
+    return "The advisory service is busy. Please try again shortly."
 
 
 @router.post("/profile")
@@ -141,10 +155,14 @@ def vision(user_id: int = Depends(identity), image: UploadFile = File(...), lang
             assessment = turn["assessment"]
             result["treatment"] = assessment["response"]
             remember(db, farmer, previous, revision, {"caption": caption, "photo_findings": result["disease"]}, assessment["response"])
+        except QuotaExceeded:
+            raise
         except Exception:
             logger.warning("Photo treatment lookup unavailable", exc_info=True)
             result["treatment"] = "Treatment assessment unavailable. No treatment was verified."
         return {"response": result}
+    except QuotaExceeded:
+        return {"response": {"kind": "crop_notice", "message": quota_message(language, caption)}}
     except HTTPException:
         raise
     except Exception as e:
@@ -172,7 +190,11 @@ def voice(user_id: int = Depends(identity), audio: UploadFile = File(...), db: S
         if not wav_path:
             raise HTTPException(status_code=500, detail="Failed to convert audio.")
             
-        text, lang = transcribe_voice(wav_path)
+        try:
+            text, lang = transcribe_voice(wav_path)
+        except QuotaExceeded:
+            details = db.get(models.CropProfile, user_id)
+            return {"response": quota_message(details.language if details else "")}
         if not text:
             raise HTTPException(status_code=400, detail="Could not understand audio.")
             

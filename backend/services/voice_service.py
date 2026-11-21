@@ -16,7 +16,8 @@ log = logging.getLogger(__name__)
 # ── Gemini API client (for STT) ────────────────────────────────────────────────
 
 from services.model_runtime import generate
-from config import AUDIO_MODEL
+from app.core.config import settings
+from app.core.llm import QuotaExceeded
 
 
 # ── Language resolution ────────────────────────────────────────────────────────
@@ -127,20 +128,15 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
     Returns (text, language_iso_code) or (None, None) on failure.
     """
     try:
-        provider = os.getenv("STT_PROVIDER") or ("groq" if AUDIO_MODEL.startswith("groq/") else "gemini")
-        if provider == "groq":
-            from groq import Groq
-            with open(audio_file_path, "rb") as audio:
-                transcript = Groq(timeout=45, max_retries=1).audio.transcriptions.create(
-                    file=audio, model=os.getenv("WHISPER_MODEL", "whisper-large-v3-turbo"), response_format="verbose_json")
-            return transcript.text.strip() or None, transcript.language
+        if settings.STT_PROVIDER != "gemini":
+            return None, None
 
         with open(audio_file_path, "rb") as f:
             audio_bytes = f.read()
 
         raw = generate("Transcribe the spoken language without translating or answering.",
                        "Return the transcript followed by [lang: ISO language code].",
-                       spec=AUDIO_MODEL, media=("audio", "audio/wav", audio_bytes), max_tokens=1600)
+                       role="vision", media=("audio", "audio/wav", audio_bytes), max_tokens=1600)
 
         # Extract language tag if present
         language = "en"
@@ -159,8 +155,10 @@ def transcribe_voice(audio_file_path: str) -> tuple[str | None, str | None]:
         log.info("Transcription completed")
         return text, language
 
+    except QuotaExceeded:
+        raise
     except Exception as e:
-        log.error("Transcription error: %s", e)
+        log.error("Transcription error: %s", type(e).__name__)
         return None, None
 
 
